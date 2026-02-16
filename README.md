@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/hero.svg" alt="promptdiff" width="800">
+  <img src="assets/banner.svg" alt="promptdiff" width="800">
 </p>
 
 <p align="center">

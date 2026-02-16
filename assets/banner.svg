@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 640">
+  <!-- Soft teal background -->
+  <rect width="1280" height="640" fill="#C4EDEB"/>
+  
+  <!-- Centered dark diamond -->
+  <g transform="translate(640, 260)">
+    <rect x="-75" y="-75" width="150" height="150" rx="24" fill="#2B3440" transform="rotate(45)"/>
+    <!-- Two overlapping docs with diff lines -->
+    <g>
+      <!-- Back doc (removals) -->
+      <rect x="-22" y="-30" width="28" height="36" rx="4" fill="none" stroke="#F87171" stroke-width="3.5"/>
+      <line x1="-16" y1="-20" x2="-2" y2="-20" stroke="#F87171" stroke-width="2.5" stroke-linecap="round"/>
+      <line x1="-16" y1="-12" x2="-6" y2="-12" stroke="#F87171" stroke-width="2.5" stroke-linecap="round"/>
+      <line x1="-16" y1="-4" x2="-2" y2="-4" stroke="#F87171" stroke-width="2.5" stroke-linecap="round"/>
+      
+      <!-- Front doc (additions) -->
+      <rect x="-6" y="-6" width="28" height="36" rx="4" fill="#2B3440" stroke="#4ADE80" stroke-width="3.5"/>
+      <line x1="0" y1="4" x2="16" y2="4" stroke="#4ADE80" stroke-width="2.5" stroke-linecap="round"/>
+      <line x1="0" y1="12" x2="12" y2="12" stroke="#4ADE80" stroke-width="2.5" stroke-linecap="round"/>
+      <line x1="0" y1="20" x2="16" y2="20" stroke="#4ADE80" stroke-width="2.5" stroke-linecap="round"/>
+    </g>
+  </g>
+
+  <!-- Project name -->
+  <text x="640" y="410" text-anchor="middle" font-family="'JetBrains Mono','SF Mono','Fira Code','Courier New',monospace" font-size="36" font-weight="700" fill="#2B3440" letter-spacing="-0.5">promptdiff</text>
+  
+  <!-- Tagline -->
+  <text x="640" y="450" text-anchor="middle" font-family="'JetBrains Mono','SF Mono','Fira Code','Courier New',monospace" font-size="16" font-weight="400" fill="#2B3440" opacity="0.6">Git-style version control for LLM prompts</text>
+</svg>
