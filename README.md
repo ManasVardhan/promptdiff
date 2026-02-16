@@ -39,6 +39,8 @@ pip install promptdiff
 
 ```bash
 # Initialize a promptdiff repo
+
+> **New here?** Start with the [Getting Started Guide](GETTING_STARTED.md).
 promptdiff init
 
 # Add your first prompt version
