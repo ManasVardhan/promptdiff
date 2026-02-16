@@ -52,7 +52,7 @@ def main() -> None:
         v3 = store.get_version("summarizer", 3)
         result = differ.full_diff(v1.content, v3.content, 1, 3)
 
-        print(f"Diff v1 -> v3:")
+        print("Diff v1 -> v3:")
         print(f"  Text similarity:     {result.similarity_ratio:.1%}")
         print(f"  Semantic similarity:  {result.semantic_similarity:.1%}")
         print(f"  Additions: {result.stats['additions']}, Deletions: {result.stats['deletions']}\n")

@@ -5,8 +5,8 @@ from __future__ import annotations
 import pytest
 from pathlib import Path
 
-from promptdiff.store import PromptStore, VersionInfo
-from promptdiff.diff import PromptDiff, DiffResult
+from promptdiff.store import PromptStore
+from promptdiff.diff import PromptDiff
 from promptdiff.registry import PromptRegistry
 from promptdiff.eval import PromptEvaluator, TestCase, exact_match_scorer, similarity_scorer
 from promptdiff.changelog import ChangelogGenerator

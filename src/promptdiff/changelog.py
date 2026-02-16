@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-from datetime import datetime
-from typing import Any
 
 from promptdiff.diff import PromptDiff
-from promptdiff.store import PromptStore, VersionInfo
+from promptdiff.store import PromptStore
 
 
 class ChangelogGenerator:
