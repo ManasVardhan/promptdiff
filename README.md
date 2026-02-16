@@ -1,9 +1,4 @@
-<p align="center">
-  <img src="assets/banner.svg" alt="promptdiff" width="800">
-</p>
 
-<p align="center">
-  <h1 align="center">🔀 promptdiff</h1>
   <p align="center"><strong>Git-style diff and version control for LLM prompts</strong></p>
 </p>
 
