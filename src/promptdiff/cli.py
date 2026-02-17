@@ -174,7 +174,12 @@ def changelog(name: str, last: int | None) -> None:
 @click.argument("name")
 @click.argument("version", type=int)
 def eval_cmd(name: str, version: int) -> None:
-    """Evaluate a prompt version (demo with built-in test)."""
+    """Evaluate a prompt version (demo: self-test mode).
+
+    NOTE: This is a demo command that evaluates the prompt against itself,
+    so it will always score ~100%. For real evaluation, use the Python API
+    with custom test cases and an LLM runner. See the README for details.
+    """
     store = _get_store()
     v = store.get_version(name, version)
 
