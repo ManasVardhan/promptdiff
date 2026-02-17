@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "promptdiff"
+name = "llm-promptdiff"
 version = "0.1.0"
 description = "Git-style diff and version control for LLM prompts"
 readme = "README.md"
