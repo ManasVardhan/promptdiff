@@ -4,8 +4,8 @@
 
 <p align="center">
   <a href="https://github.com/ManasVardhan/promptdiff/actions"><img src="https://img.shields.io/github/actions/workflow/status/ManasVardhan/promptdiff/ci.yml?branch=main&style=flat-square" alt="CI"></a>
-  <a href="https://pypi.org/project/promptdiff/"><img src="https://img.shields.io/pypi/v/promptdiff?style=flat-square&color=blue" alt="PyPI"></a>
-  <a href="https://pypi.org/project/promptdiff/"><img src="https://img.shields.io/pypi/pyversions/promptdiff?style=flat-square" alt="Python"></a>
+  <a href="https://pypi.org/project/llm-promptdiff/"><img src="https://img.shields.io/pypi/v/promptdiff?style=flat-square&color=blue" alt="PyPI"></a>
+  <a href="https://pypi.org/project/llm-promptdiff/"><img src="https://img.shields.io/pypi/pyversions/promptdiff?style=flat-square" alt="Python"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="License"></a>
 </p>
 
@@ -32,7 +32,7 @@ You iterate on prompts dozens of times. You tweak a system message, change a few
 ## Quick Start
 
 ```bash
-pip install promptdiff
+pip install llm-promptdiff
 ```
 
 ### Initialize and start tracking
@@ -129,7 +129,7 @@ Each version stores a content hash, timestamp, message, and arbitrary metadata. 
 Beyond line-level text diffs, `promptdiff` computes similarity between versions:
 
 - **Built-in**: Jaccard word-overlap similarity (zero dependencies)
-- **Optional**: OpenAI embedding cosine similarity for true semantic comparison (`pip install promptdiff[embeddings]`)
+- **Optional**: OpenAI embedding cosine similarity for true semantic comparison (`pip install llm-promptdiff[embeddings]`)
 
 The built-in scorer measures word overlap, which is useful for detecting surface-level changes. For actual semantic similarity (detecting meaning changes), use the optional embeddings integration.
 
@@ -186,7 +186,7 @@ Add prompt regression checks to your CI pipeline:
 # .github/workflows/prompt-check.yml
 - name: Check prompt quality
   run: |
-    pip install promptdiff
+    pip install llm-promptdiff
     promptdiff eval summarizer 3
 ```
 
