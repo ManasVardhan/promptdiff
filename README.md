@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/yourusername/promptdiff/actions"><img src="https://img.shields.io/github/actions/workflow/status/yourusername/promptdiff/ci.yml?branch=main&style=flat-square" alt="CI"></a>
+  <a href="https://github.com/ManasVardhan/promptdiff/actions"><img src="https://img.shields.io/github/actions/workflow/status/ManasVardhan/promptdiff/ci.yml?branch=main&style=flat-square" alt="CI"></a>
   <a href="https://pypi.org/project/promptdiff/"><img src="https://img.shields.io/pypi/v/promptdiff?style=flat-square&color=blue" alt="PyPI"></a>
   <a href="https://pypi.org/project/promptdiff/"><img src="https://img.shields.io/pypi/pyversions/promptdiff?style=flat-square" alt="Python"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="License"></a>
@@ -23,7 +23,7 @@ You iterate on prompts dozens of times. You tweak a system message, change a few
 
 - 📦 **Version Control** - Store and track every prompt version with messages and metadata
 - 🔀 **Smart Diffs** - Line-level text diffs with additions, deletions, and similarity scores
-- 🧠 **Semantic Similarity** - Word-overlap similarity built in, OpenAI embeddings optional
+- 🧠 **Similarity Scoring** - Word-overlap (Jaccard) similarity built in, OpenAI embeddings optional
 - 🏷️ **Tags & Registry** - Organize prompts with tags, find them by name or label
 - 📊 **Evaluation** - Run prompt versions against test cases and score results
 - 📋 **Changelog** - Auto-generate version history with diff stats
@@ -69,8 +69,8 @@ Diff: summarizer v1 -> v2
 +
 + Summary:
 
-Text similarity:     32.5%
-Semantic similarity:  54.2%
+Text similarity:       32.5%
+Word-overlap similarity: 54.2%
 Changes: +4 -1
 ```
 
@@ -124,14 +124,14 @@ Every prompt gets its own directory with numbered versions and metadata:
 
 Each version stores a content hash, timestamp, message, and arbitrary metadata. Duplicate content is detected and skipped automatically.
 
-## Semantic Diff
+## Similarity Scoring
 
-Beyond line-level text diffs, `promptdiff` computes semantic similarity between versions:
+Beyond line-level text diffs, `promptdiff` computes similarity between versions:
 
-- **Built-in**: Jaccard word overlap (zero dependencies)
-- **Optional**: OpenAI embedding cosine similarity (`pip install promptdiff[embeddings]`)
+- **Built-in**: Jaccard word-overlap similarity (zero dependencies)
+- **Optional**: OpenAI embedding cosine similarity for true semantic comparison (`pip install promptdiff[embeddings]`)
 
-This tells you whether a rewrite actually changed the *meaning* or just the wording.
+The built-in scorer measures word overlap, which is useful for detecting surface-level changes. For actual semantic similarity (detecting meaning changes), use the optional embeddings integration.
 
 ## Evaluation
 
