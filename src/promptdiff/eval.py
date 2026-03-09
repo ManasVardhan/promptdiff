@@ -13,13 +13,18 @@ class Scorer(Protocol):
 
 
 @dataclass
-class TestCase:
+class PromptTestCase:
     """A single test case for prompt evaluation."""
+    __test__ = False  # Prevent pytest collection
 
     name: str
     input_vars: dict[str, str]
     expected: str
     weight: float = 1.0
+
+
+# Backward-compatible alias
+TestCase = PromptTestCase
 
 
 @dataclass

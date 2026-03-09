@@ -22,7 +22,7 @@ def _get_store() -> PromptStore:
 
 
 @click.group()
-@click.version_option(package_name="promptdiff")
+@click.version_option(package_name="llm-promptdiff")
 def cli() -> None:
     """promptdiff - Git-style version control for LLM prompts."""
     pass
