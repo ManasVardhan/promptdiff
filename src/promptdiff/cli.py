@@ -9,6 +9,7 @@ import click
 from rich.console import Console
 from rich.table import Table
 
+from promptdiff import __version__
 from promptdiff.changelog import ChangelogGenerator
 from promptdiff.diff import PromptDiff
 from promptdiff.eval import PromptEvaluator, TestCase
@@ -22,7 +23,7 @@ def _get_store() -> PromptStore:
 
 
 @click.group()
-@click.version_option(package_name="llm-promptdiff")
+@click.version_option(version=__version__, package_name="llm-promptdiff")
 def cli() -> None:
     """promptdiff - Git-style version control for LLM prompts."""
     pass

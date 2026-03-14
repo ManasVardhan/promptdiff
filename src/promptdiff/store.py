@@ -15,10 +15,12 @@ META_FILE = "promptdiff.json"
 
 
 def _now_iso() -> str:
+    """Return the current UTC time as an ISO 8601 string."""
     return datetime.now(timezone.utc).isoformat()
 
 
 def _content_hash(text: str) -> str:
+    """Return a truncated SHA-256 hex digest (12 chars) of the given text."""
     return hashlib.sha256(text.encode()).hexdigest()[:12]
 
 
@@ -42,6 +44,7 @@ class VersionInfo:
         self.metadata = metadata or {}
 
     def to_dict(self) -> dict[str, Any]:
+        """Serialize version metadata to a dictionary (excludes content)."""
         return {
             "version": self.version,
             "message": self.message,
@@ -52,6 +55,7 @@ class VersionInfo:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any], content: str = "") -> VersionInfo:
+        """Reconstruct a VersionInfo from a metadata dict and optional content string."""
         return cls(
             version=data["version"],
             content=content,
@@ -76,16 +80,27 @@ class PromptStore:
     """
 
     def __init__(self, root: str | Path = ".") -> None:
+        """Create a PromptStore rooted at the given directory.
+
+        Args:
+            root: Filesystem path that will contain the ``.promptdiff/`` directory.
+                  Defaults to the current working directory.
+        """
         self.root = Path(root).resolve()
         self.store_path = self.root / STORE_DIR
         self.prompts_path = self.store_path / PROMPTS_DIR
 
     @property
     def initialized(self) -> bool:
+        """Return True if this directory has been initialized with ``promptdiff init``."""
         return (self.store_path / META_FILE).exists()
 
     def init(self) -> Path:
-        """Initialize a new promptdiff store."""
+        """Initialize a new promptdiff store. Safe to call multiple times.
+
+        Returns:
+            Path to the created ``.promptdiff/`` directory.
+        """
         self.store_path.mkdir(parents=True, exist_ok=True)
         self.prompts_path.mkdir(exist_ok=True)
         meta_path = self.store_path / META_FILE
@@ -120,7 +135,21 @@ class PromptStore:
         message: str = "",
         metadata: dict[str, Any] | None = None,
     ) -> VersionInfo:
-        """Add a new version of a prompt. Creates the prompt if it doesn't exist."""
+        """Add a new version of a prompt. Creates the prompt if it does not exist.
+
+        Duplicate content is detected automatically: if *content* is identical
+        to the latest version, the existing ``VersionInfo`` is returned instead
+        of creating a new version.
+
+        Args:
+            name: Prompt identifier (used as the directory name).
+            content: Full text of the prompt version.
+            message: Human-readable description of what changed.
+            metadata: Arbitrary key/value pairs stored alongside the version.
+
+        Returns:
+            ``VersionInfo`` for the newly created (or existing duplicate) version.
+        """
         self._ensure_init()
         prompt_dir = self._prompt_dir(name)
         prompt_dir.mkdir(parents=True, exist_ok=True)
@@ -156,7 +185,12 @@ class PromptStore:
         return info
 
     def get_version(self, name: str, version: int | None = None) -> VersionInfo:
-        """Get a specific version (or latest) of a prompt."""
+        """Retrieve a specific version of a prompt, or the latest if *version* is None.
+
+        Raises:
+            FileNotFoundError: If the prompt or requested version does not exist.
+            ValueError: If version metadata is missing (corrupted store).
+        """
         self._ensure_init()
         meta = self._read_meta(name)
 
@@ -175,7 +209,11 @@ class PromptStore:
         return VersionInfo.from_dict(version_data, content=content)
 
     def list_versions(self, name: str) -> list[VersionInfo]:
-        """List all versions of a prompt."""
+        """Return all versions of a prompt in chronological order.
+
+        Raises:
+            FileNotFoundError: If the prompt does not exist.
+        """
         self._ensure_init()
         meta = self._read_meta(name)
         results = []
@@ -185,7 +223,7 @@ class PromptStore:
         return results
 
     def list_prompts(self) -> list[str]:
-        """List all prompt names in the store."""
+        """Return a sorted list of all prompt names in the store."""
         self._ensure_init()
         if not self.prompts_path.exists():
             return []
@@ -194,7 +232,11 @@ class PromptStore:
         )
 
     def delete_prompt(self, name: str) -> None:
-        """Delete a prompt and all its versions."""
+        """Delete a prompt and all its versions permanently.
+
+        Raises:
+            FileNotFoundError: If the prompt does not exist.
+        """
         self._ensure_init()
         prompt_dir = self._prompt_dir(name)
         if not prompt_dir.exists():
@@ -202,6 +244,7 @@ class PromptStore:
         shutil.rmtree(prompt_dir)
 
     def _ensure_init(self) -> None:
+        """Raise RuntimeError if the store has not been initialized."""
         if not self.initialized:
             raise RuntimeError(
                 "Not a promptdiff repository. Run 'promptdiff init' first."

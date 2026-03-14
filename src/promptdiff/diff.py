@@ -41,7 +41,21 @@ class PromptDiff:
         old_version: int = 0,
         new_version: int = 0,
     ) -> DiffResult:
-        """Compute a line-level text diff between two prompts."""
+        """Compute a line-level text diff between two prompt strings.
+
+        Uses ``difflib.SequenceMatcher`` to produce equal, insert, delete,
+        and replace operations, then flattens replacements into separate
+        delete + insert pairs for cleaner output.
+
+        Args:
+            old_text: The original prompt text.
+            new_text: The updated prompt text.
+            old_version: Version label for the original (used in the result).
+            new_version: Version label for the update (used in the result).
+
+        Returns:
+            A ``DiffResult`` with per-line changes, similarity ratio, and stats.
+        """
         old_lines = old_text.splitlines(keepends=True)
         new_lines = new_text.splitlines(keepends=True)
 
@@ -87,9 +101,14 @@ class PromptDiff:
         )
 
     def semantic_similarity(self, text_a: str, text_b: str) -> float:
-        """Compute semantic similarity using character/word overlap (no external API needed).
+        """Compute similarity via Jaccard word overlap (no external API needed).
 
-        For higher quality, install `promptdiff[embeddings]` and use `embedding_similarity`.
+        Splits both texts on whitespace, lowercases, and returns
+        ``|intersection| / |union|``.  This catches surface-level wording
+        changes but not deeper semantic shifts.
+
+        For true semantic comparison, install ``promptdiff[embeddings]``
+        and use :meth:`embedding_similarity`.
         """
         words_a = set(text_a.lower().split())
         words_b = set(text_b.lower().split())
@@ -109,7 +128,21 @@ class PromptDiff:
         text_b: str,
         model: str = "text-embedding-3-small",
     ) -> float:
-        """Compute semantic similarity using OpenAI embeddings. Requires `promptdiff[embeddings]`."""
+        """Compute semantic similarity via OpenAI embedding cosine distance.
+
+        Requires the ``embeddings`` extra: ``pip install llm-promptdiff[embeddings]``.
+
+        Args:
+            text_a: First text to compare.
+            text_b: Second text to compare.
+            model: OpenAI embedding model name.
+
+        Returns:
+            Cosine similarity in the range [-1, 1] (typically 0 to 1 for text).
+
+        Raises:
+            ImportError: If ``openai`` or ``numpy`` are not installed.
+        """
         try:
             import numpy as np
             from openai import OpenAI
@@ -134,13 +167,30 @@ class PromptDiff:
         new_version: int = 0,
         use_embeddings: bool = False,
     ) -> DiffResult:
-        """Compute full diff with both text and semantic similarity."""
+        """Compute a complete diff: line-level changes plus semantic similarity.
+
+        Combines :meth:`text_diff` and :meth:`semantic_similarity` into a single
+        ``DiffResult``.
+
+        Args:
+            old_text: The original prompt text.
+            new_text: The updated prompt text.
+            old_version: Version label for the original.
+            new_version: Version label for the update.
+            use_embeddings: Reserved for future use (embedding support).
+
+        Returns:
+            A ``DiffResult`` with lines, similarity_ratio, semantic_similarity, and stats.
+        """
         result = self.text_diff(old_text, new_text, old_version, new_version)
         result.semantic_similarity = self.semantic_similarity(old_text, new_text)
         return result
 
     def unified_diff(self, old_text: str, new_text: str, old_label: str = "old", new_label: str = "new") -> str:
-        """Return a unified diff string."""
+        """Return a unified diff string (the format used by ``diff -u``).
+
+        Returns an empty string when the texts are identical.
+        """
         return "".join(
             difflib.unified_diff(
                 old_text.splitlines(keepends=True),

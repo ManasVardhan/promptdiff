@@ -39,12 +39,14 @@ class EvalResult:
 
     @property
     def mean_score(self) -> float:
+        """Arithmetic mean of all test case scores (0.0 if no scores)."""
         if not self.scores:
             return 0.0
         return sum(self.scores) / len(self.scores)
 
     @property
     def weighted_score(self) -> float:
+        """Weighted mean of scores using each test case's weight."""
         if not self.details:
             return 0.0
         total_weight = sum(d.get("weight", 1.0) for d in self.details)
@@ -55,6 +57,7 @@ class EvalResult:
 
     @property
     def passed(self) -> bool:
+        """True if every individual score is at least 0.5."""
         return all(s >= 0.5 for s in self.scores)
 
 
@@ -109,7 +112,17 @@ class PromptEvaluator:
         content: str,
         test_cases: list[TestCase],
     ) -> EvalResult:
-        """Run prompt content against test cases and score results."""
+        """Run *content* through the runner for each test case and score the outputs.
+
+        Args:
+            prompt_name: Identifier for the prompt (stored in the result).
+            version: Version number (stored in the result).
+            content: The prompt template string.
+            test_cases: List of ``TestCase`` instances to evaluate against.
+
+        Returns:
+            An ``EvalResult`` containing per-case scores and aggregate metrics.
+        """
         result = EvalResult(prompt_name=prompt_name, version=version)
 
         for tc in test_cases:
@@ -133,7 +146,11 @@ class PromptEvaluator:
         self,
         results: list[EvalResult],
     ) -> dict[str, Any]:
-        """Compare evaluation results across versions."""
+        """Compare evaluation results across multiple versions.
+
+        Returns a dict with a ``versions`` list (per-version stats) and
+        ``best_version`` (the version with the highest weighted score).
+        """
         return {
             "versions": [
                 {

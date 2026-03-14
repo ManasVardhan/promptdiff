@@ -11,11 +11,20 @@ class ChangelogGenerator:
     """Generate changelogs from prompt version history."""
 
     def __init__(self, store: PromptStore) -> None:
+        """Create a changelog generator backed by the given store."""
         self.store = store
         self.differ = PromptDiff()
 
     def generate(self, name: str, last_n: int | None = None) -> str:
-        """Generate a markdown changelog for a prompt."""
+        """Generate a Markdown changelog for a single prompt.
+
+        Args:
+            name: The prompt identifier.
+            last_n: If set, include only the most recent *last_n* versions.
+
+        Returns:
+            A Markdown-formatted changelog string.
+        """
         versions = self.store.list_versions(name)
         if last_n is not None:
             versions = versions[-last_n:]
@@ -54,7 +63,7 @@ class ChangelogGenerator:
         return "\n".join(lines)
 
     def generate_all(self) -> str:
-        """Generate a combined changelog for all prompts."""
+        """Generate a combined Markdown changelog covering every prompt in the store."""
         prompts = self.store.list_prompts()
         if not prompts:
             return "# Changelog\n\nNo prompts tracked yet.\n"

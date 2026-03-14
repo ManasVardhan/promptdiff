@@ -1,11 +1,10 @@
 
-  <p align="center"><strong>Git-style diff and version control for LLM prompts</strong></p>
-</p>
+<p align="center"><strong>Git-style diff and version control for LLM prompts</strong></p>
 
 <p align="center">
   <a href="https://github.com/ManasVardhan/promptdiff/actions"><img src="https://img.shields.io/github/actions/workflow/status/ManasVardhan/promptdiff/ci.yml?branch=main&style=flat-square" alt="CI"></a>
-  <a href="https://pypi.org/project/llm-promptdiff/"><img src="https://img.shields.io/pypi/v/promptdiff?style=flat-square&color=blue" alt="PyPI"></a>
-  <a href="https://pypi.org/project/llm-promptdiff/"><img src="https://img.shields.io/pypi/pyversions/promptdiff?style=flat-square" alt="Python"></a>
+  <a href="https://pypi.org/project/llm-promptdiff/"><img src="https://img.shields.io/pypi/v/llm-promptdiff?style=flat-square&color=blue" alt="PyPI"></a>
+  <a href="https://pypi.org/project/llm-promptdiff/"><img src="https://img.shields.io/pypi/pyversions/llm-promptdiff?style=flat-square" alt="Python"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="License"></a>
 </p>
 
@@ -37,10 +36,10 @@ pip install llm-promptdiff
 
 ### Initialize and start tracking
 
+> **New here?** Start with the [Getting Started Guide](GETTING_STARTED.md).
+
 ```bash
 # Initialize a promptdiff repo
-
-> **New here?** Start with the [Getting Started Guide](GETTING_STARTED.md).
 promptdiff init
 
 # Add your first prompt version
@@ -69,9 +68,9 @@ Diff: summarizer v1 -> v2
 +
 + Summary:
 
-Text similarity:       32.5%
-Word-overlap similarity: 54.2%
-Changes: +4 -1
+Text similarity:       0.0%
+Semantic similarity:   18.8%
+Changes: +5 -1
 ```
 
 ```bash

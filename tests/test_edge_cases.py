@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 import pytest
@@ -16,7 +15,6 @@ from promptdiff.eval import (
     TestCase,
     exact_match_scorer,
     contains_scorer,
-    similarity_scorer,
     EvalResult,
 )
 from promptdiff.changelog import ChangelogGenerator

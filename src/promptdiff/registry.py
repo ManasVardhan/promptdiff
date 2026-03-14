@@ -11,6 +11,7 @@ class PromptRegistry:
     """High-level registry for managing prompts with tags and metadata."""
 
     def __init__(self, store: PromptStore) -> None:
+        """Create a registry backed by the given ``PromptStore``."""
         self.store = store
 
     def register(
@@ -21,14 +22,21 @@ class PromptRegistry:
         tags: list[str] | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> int:
-        """Register a new prompt version. Returns the version number."""
+        """Add a new prompt version and optionally assign tags.
+
+        This is the high-level counterpart of ``PromptStore.add``, adding
+        tag management on top.
+
+        Returns:
+            The version number of the newly stored prompt.
+        """
         info = self.store.add(name, content, message=message, metadata=metadata)
         if tags:
             self.set_tags(name, tags)
         return info.version
 
     def get(self, name: str, version: int | None = None) -> str:
-        """Get prompt content by name and optional version."""
+        """Return the prompt content string for *name* at the given *version* (latest if None)."""
         return self.store.get_version(name, version).content
 
     def set_tags(self, name: str, tags: list[str]) -> None:
@@ -43,12 +51,12 @@ class PromptRegistry:
         return meta.get("tags", [])
 
     def add_tags(self, name: str, tags: list[str]) -> None:
-        """Add tags to existing tags."""
+        """Merge *tags* into the prompt's existing tag set (duplicates are removed)."""
         existing = self.get_tags(name)
         self.set_tags(name, existing + tags)
 
     def find_by_tag(self, tag: str) -> list[str]:
-        """Find all prompts with a given tag."""
+        """Return a list of prompt names that have the given *tag*."""
         results = []
         for name in self.store.list_prompts():
             if tag in self.get_tags(name):
@@ -56,7 +64,7 @@ class PromptRegistry:
         return results
 
     def list_all(self) -> list[dict[str, Any]]:
-        """List all prompts with summary info."""
+        """Return summary dicts for every prompt (name, latest_version, tags, total_versions)."""
         results = []
         for name in self.store.list_prompts():
             meta = self.store._read_meta(name)
