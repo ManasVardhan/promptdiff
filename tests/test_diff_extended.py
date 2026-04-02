@@ -19,9 +19,34 @@ class TestEmbeddingSimilarity:
     def test_embedding_similarity_import_error(self) -> None:
         """Should raise ImportError when openai is not installed."""
         d = PromptDiff()
-        # openai is not installed in the test environment, so this naturally raises
-        with pytest.raises(ImportError, match="embeddings"):
-            d.embedding_similarity("hello", "world")
+        # Mock the import to simulate openai not being available
+        import builtins
+        real_import = builtins.__import__
+
+        def mock_import(name: str, *args: object, **kwargs: object) -> object:
+            if name == "openai":
+                raise ImportError("No module named 'openai'")
+            return real_import(name, *args, **kwargs)
+
+        with patch.object(builtins, "__import__", side_effect=mock_import):
+            with pytest.raises(ImportError, match="embeddings"):
+                d.embedding_similarity("hello", "world")
+
+    def test_embedding_similarity_with_mock_client(self) -> None:
+        """Test embedding_similarity end-to-end with mocked OpenAI."""
+        d = PromptDiff()
+        mock_resp = MagicMock()
+        mock_resp.data = [
+            MagicMock(embedding=[1.0, 0.0, 0.0]),
+            MagicMock(embedding=[0.7071, 0.7071, 0.0]),
+        ]
+        with patch("openai.OpenAI") as MockOpenAI:
+            mock_client = MagicMock()
+            mock_client.embeddings.create.return_value = mock_resp
+            MockOpenAI.return_value = mock_client
+            score = d.embedding_similarity("hello", "hi")
+            assert 0.5 < score < 1.0
+            mock_client.embeddings.create.assert_called_once()
 
     def test_embedding_similarity_logic(self) -> None:
         """Test the cosine similarity math directly (bypass import)."""
