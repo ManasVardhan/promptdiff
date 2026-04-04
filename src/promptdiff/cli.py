@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -199,6 +200,201 @@ def eval_cmd(name: str, version: int) -> None:
     console.print(f"\n[bold]Eval: {name} v{version}[/bold]")
     console.print(f"Mean score: {result.mean_score:.1%}")
     console.print(f"Passed: {'[green]Yes[/green]' if result.passed else '[red]No[/red]'}")
+
+
+@cli.command("export")
+@click.argument("name", required=False)
+@click.option("-o", "--output", "output_path", type=click.Path(), help="Output file path")
+@click.option("--format", "fmt", type=click.Choice(["json", "jsonl"]), default="json", help="Output format")
+def export_cmd(name: str | None, output_path: str | None, fmt: str) -> None:
+    """Export prompt versions to JSON or JSONL for backup and sharing.
+
+    If NAME is given, exports only that prompt. Otherwise exports all prompts.
+    """
+    store = _get_store()
+
+    prompts_to_export = [name] if name else store.list_prompts()
+
+    if not prompts_to_export:
+        console.print("[yellow]No prompts to export.[/yellow]")
+        return
+
+    from promptdiff.registry import PromptRegistry
+    registry = PromptRegistry(store)
+
+    export_data: list[dict] = []
+    for pname in prompts_to_export:
+        try:
+            versions = store.list_versions(pname)
+        except FileNotFoundError:
+            console.print(f"[red]Prompt '{pname}' not found.[/red]")
+            raise SystemExit(1)
+
+        tags = registry.get_tags(pname)
+        prompt_record = {
+            "name": pname,
+            "tags": tags,
+            "versions": [
+                {
+                    "version": v.version,
+                    "content": v.content,
+                    "message": v.message,
+                    "timestamp": v.timestamp,
+                    "content_hash": v.content_hash,
+                    "metadata": v.metadata,
+                }
+                for v in versions
+            ],
+        }
+        export_data.append(prompt_record)
+
+    if fmt == "json":
+        output = json.dumps(export_data, indent=2)
+    else:
+        output = "\n".join(json.dumps(record) for record in export_data)
+
+    if output_path:
+        Path(output_path).write_text(output)
+        console.print(f"[green]Exported {len(export_data)} prompt(s) to {output_path}[/green]")
+    else:
+        click.echo(output)
+
+
+@cli.command("search")
+@click.argument("query")
+@click.option("--tag", "-t", "tag_filter", default=None, help="Filter by tag")
+@click.option("--content", "-c", "search_content", is_flag=True, help="Search within prompt content")
+def search_cmd(query: str, tag_filter: str | None, search_content: bool) -> None:
+    """Search prompts by name, tag, or content.
+
+    By default, searches prompt names. Use --content to also search
+    within prompt text. Use --tag to filter by tag.
+    """
+    store = _get_store()
+    from promptdiff.registry import PromptRegistry
+    registry = PromptRegistry(store)
+
+    prompts = store.list_prompts()
+    if not prompts:
+        console.print("[yellow]No prompts tracked yet.[/yellow]")
+        return
+
+    results: list[dict] = []
+    query_lower = query.lower()
+
+    for pname in prompts:
+        tags = registry.get_tags(pname)
+
+        # Tag filter: skip if tag doesn't match
+        if tag_filter and tag_filter not in tags:
+            continue
+
+        matched = False
+        match_reason = ""
+
+        # Name match
+        if query_lower in pname.lower():
+            matched = True
+            match_reason = "name"
+
+        # Tag match
+        if not matched and any(query_lower in t.lower() for t in tags):
+            matched = True
+            match_reason = "tag"
+
+        # Content match (only if flag set)
+        if not matched and search_content:
+            try:
+                versions = store.list_versions(pname)
+                for v in versions:
+                    if query_lower in v.content.lower():
+                        matched = True
+                        match_reason = f"content (v{v.version})"
+                        break
+            except FileNotFoundError:
+                pass
+
+        if matched:
+            meta = store._read_meta(pname)
+            results.append({
+                "name": pname,
+                "match": match_reason,
+                "versions": len(meta.get("versions", [])),
+                "tags": tags,
+            })
+
+    if not results:
+        console.print(f"[yellow]No prompts matching '{query}'.[/yellow]")
+        return
+
+    table = Table(title=f"Search: '{query}'")
+    table.add_column("Name", style="cyan")
+    table.add_column("Match", style="green")
+    table.add_column("Versions", justify="right")
+    table.add_column("Tags", style="dim")
+
+    for r in results:
+        table.add_row(
+            r["name"],
+            r["match"],
+            str(r["versions"]),
+            ", ".join(r["tags"]) if r["tags"] else "-",
+        )
+
+    console.print(table)
+
+
+@cli.command("import")
+@click.argument("file_path", type=click.Path(exists=True))
+@click.option("--merge", is_flag=True, help="Merge with existing prompts instead of skipping")
+def import_cmd(file_path: str, merge: bool) -> None:
+    """Import prompts from a JSON export file.
+
+    Reads a file created by 'promptdiff export' and adds the prompts
+    to the current store. Existing prompts are skipped unless --merge is set.
+    """
+    store = _get_store()
+    from promptdiff.registry import PromptRegistry
+    registry = PromptRegistry(store)
+
+    raw = Path(file_path).read_text()
+
+    # Support both JSON array and JSONL
+    try:
+        data = json.loads(raw)
+        if isinstance(data, dict):
+            data = [data]
+    except json.JSONDecodeError:
+        data = []
+        for line in raw.strip().splitlines():
+            line = line.strip()
+            if line:
+                data.append(json.loads(line))
+
+    imported = 0
+    skipped = 0
+
+    for record in data:
+        pname = record["name"]
+        existing = store.list_prompts()
+        if pname in existing and not merge:
+            console.print(f"[yellow]Skipping '{pname}' (already exists, use --merge to add versions)[/yellow]")
+            skipped += 1
+            continue
+
+        for v in record.get("versions", []):
+            store.add(
+                pname,
+                v["content"],
+                message=v.get("message", ""),
+                metadata=v.get("metadata"),
+            )
+            imported += 1
+
+        if record.get("tags"):
+            registry.set_tags(pname, record["tags"])
+
+    console.print(f"[green]Imported {imported} version(s), skipped {skipped} prompt(s).[/green]")
 
 
 if __name__ == "__main__":

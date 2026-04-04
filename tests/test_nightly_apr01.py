@@ -144,19 +144,35 @@ class TestFullDiffWithEmbeddings:
     """Test full_diff with use_embeddings=True (mocked OpenAI)."""
 
     def test_full_diff_embeddings(self) -> None:
+        import types
+        import sys
+
         d = PromptDiff()
         mock_resp = MagicMock()
         mock_resp.data = [
             MagicMock(embedding=[1.0, 0.0, 0.0]),
             MagicMock(embedding=[0.9, 0.1, 0.0]),
         ]
-        with patch("openai.OpenAI") as MockOAI:
-            mock_client = MagicMock()
-            mock_client.embeddings.create.return_value = mock_resp
-            MockOAI.return_value = mock_client
-            result = d.full_diff("old text", "new text", use_embeddings=True)
-            assert result.semantic_similarity is not None
-            assert 0 <= result.semantic_similarity <= 1.0
+
+        # Create a fake openai module so patch("openai.OpenAI") works
+        fake_openai = types.ModuleType("openai")
+        fake_openai.OpenAI = MagicMock  # type: ignore[attr-defined]
+        was_installed = "openai" in sys.modules
+        old_mod = sys.modules.get("openai")
+        sys.modules["openai"] = fake_openai
+        try:
+            with patch("openai.OpenAI") as MockOAI:
+                mock_client = MagicMock()
+                mock_client.embeddings.create.return_value = mock_resp
+                MockOAI.return_value = mock_client
+                result = d.full_diff("old text", "new text", use_embeddings=True)
+                assert result.semantic_similarity is not None
+                assert 0 <= result.semantic_similarity <= 1.0
+        finally:
+            if was_installed and old_mod is not None:
+                sys.modules["openai"] = old_mod
+            else:
+                sys.modules.pop("openai", None)
 
     def test_full_diff_no_embeddings(self) -> None:
         d = PromptDiff()

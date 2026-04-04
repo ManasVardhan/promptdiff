@@ -34,19 +34,35 @@ class TestEmbeddingSimilarity:
 
     def test_embedding_similarity_with_mock_client(self) -> None:
         """Test embedding_similarity end-to-end with mocked OpenAI."""
+        import types
+        import sys
+
         d = PromptDiff()
         mock_resp = MagicMock()
         mock_resp.data = [
             MagicMock(embedding=[1.0, 0.0, 0.0]),
             MagicMock(embedding=[0.7071, 0.7071, 0.0]),
         ]
-        with patch("openai.OpenAI") as MockOpenAI:
-            mock_client = MagicMock()
-            mock_client.embeddings.create.return_value = mock_resp
-            MockOpenAI.return_value = mock_client
-            score = d.embedding_similarity("hello", "hi")
-            assert 0.5 < score < 1.0
-            mock_client.embeddings.create.assert_called_once()
+
+        # Create a fake openai module so patch("openai.OpenAI") works
+        fake_openai = types.ModuleType("openai")
+        fake_openai.OpenAI = MagicMock  # type: ignore[attr-defined]
+        was_installed = "openai" in sys.modules
+        old_mod = sys.modules.get("openai")
+        sys.modules["openai"] = fake_openai
+        try:
+            with patch("openai.OpenAI") as MockOpenAI:
+                mock_client = MagicMock()
+                mock_client.embeddings.create.return_value = mock_resp
+                MockOpenAI.return_value = mock_client
+                score = d.embedding_similarity("hello", "hi")
+                assert 0.5 < score < 1.0
+                mock_client.embeddings.create.assert_called_once()
+        finally:
+            if was_installed and old_mod is not None:
+                sys.modules["openai"] = old_mod
+            else:
+                sys.modules.pop("openai", None)
 
     def test_embedding_similarity_logic(self) -> None:
         """Test the cosine similarity math directly (bypass import)."""
