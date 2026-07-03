@@ -123,6 +123,22 @@ Every prompt gets its own directory with numbered versions and metadata:
 
 Each version stores a content hash, timestamp, message, and arbitrary metadata. Duplicate content is detected and skipped automatically.
 
+Retrieve and restore versions from the CLI:
+
+```bash
+# Print the latest version (or -v 2 for a specific one)
+promptdiff show summarizer
+
+# Pipe raw prompt text into another tool
+promptdiff show summarizer --raw | pbcopy
+
+# Bad deploy? Restore v2 as a new version, history stays intact
+promptdiff rollback summarizer 2 -m "revert tone experiment"
+
+# Remove a prompt entirely (asks for confirmation without -y)
+promptdiff rm old-prompt -y
+```
+
 ## Similarity Scoring
 
 Beyond line-level text diffs, `promptdiff` computes similarity between versions:
@@ -208,11 +224,17 @@ def test_prompt_similarity():
 |---|---|
 | `promptdiff init` | Initialize a new promptdiff repository |
 | `promptdiff add <name> -m "msg"` | Add a new prompt version |
+| `promptdiff show <name> [-v N] [--raw]` | Print a prompt version's content |
 | `promptdiff diff <name> <v1> <v2>` | Show diff between versions |
 | `promptdiff log <name>` | Show version history |
+| `promptdiff rollback <name> <version>` | Restore an old version as a new latest |
 | `promptdiff list` | List all tracked prompts |
+| `promptdiff rm <name> [-y]` | Delete a prompt and all its versions |
+| `promptdiff search <query> [--tag] [--content]` | Search prompts |
 | `promptdiff changelog <name>` | Generate changelog |
 | `promptdiff eval <name> <version>` | Evaluate a prompt version |
+| `promptdiff export [name] [-o file]` | Export prompts to JSON or JSONL |
+| `promptdiff import <file> [--merge]` | Import prompts from a backup |
 
 ## License
 

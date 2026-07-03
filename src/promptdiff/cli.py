@@ -137,6 +137,85 @@ def log(name: str) -> None:
     console.print(table)
 
 
+@cli.command("show")
+@click.argument("name")
+@click.option("-v", "--version", "version", type=int, default=None, help="Version to show (default: latest)")
+@click.option("--raw", is_flag=True, help="Print content only, no header. Useful for piping.")
+def show_cmd(name: str, version: int | None, raw: bool) -> None:
+    """Print the content of a prompt version.
+
+    Shows the latest version unless -v is given. Use --raw to pipe the
+    prompt text into other tools without any decoration.
+    """
+    store = _get_store()
+    try:
+        info = store.get_version(name, version)
+    except (FileNotFoundError, ValueError) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise SystemExit(1)
+
+    if raw:
+        click.echo(info.content, nl=False)
+        return
+
+    console.print(f"[bold cyan]{name} v{info.version}[/bold cyan] [{info.content_hash}]")
+    if info.message:
+        console.print(f"[dim]{info.message}[/dim]")
+    if info.timestamp:
+        console.print(f"[dim]{info.timestamp}[/dim]")
+    console.print()
+    click.echo(info.content)
+
+
+@cli.command("rollback")
+@click.argument("name")
+@click.argument("version", type=int)
+@click.option("-m", "--message", default="", help="Message for the new version")
+def rollback_cmd(name: str, version: int, message: str) -> None:
+    """Restore an old version as a new latest version.
+
+    Creates a new version whose content matches VERSION, keeping full
+    history intact, just like git revert.
+    """
+    store = _get_store()
+    try:
+        old = store.get_version(name, version)
+        latest = store.get_version(name)
+    except (FileNotFoundError, ValueError) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise SystemExit(1)
+
+    if latest.content == old.content:
+        console.print(
+            f"[yellow]v{latest.version} already matches v{version}. Nothing to do.[/yellow]"
+        )
+        return
+
+    info = store.add(name, old.content, message=message or f"Rollback to v{version}")
+    console.print(
+        f"[green]Rolled back {name} to v{version} as new v{info.version}[/green] [{info.content_hash}]"
+    )
+
+
+@cli.command("rm")
+@click.argument("name")
+@click.option("-y", "--yes", is_flag=True, help="Skip confirmation prompt.")
+def rm_cmd(name: str, yes: bool) -> None:
+    """Delete a prompt and all its versions permanently."""
+    store = _get_store()
+    if not yes:
+        click.confirm(
+            f"Delete '{name}' and all its versions? This cannot be undone",
+            abort=True,
+        )
+    try:
+        store.delete_prompt(name)
+    except FileNotFoundError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise SystemExit(1)
+    console.print(f"[green]Deleted prompt '{name}'.[/green]")
+
+
 @cli.command("list")
 def list_cmd() -> None:
     """List all tracked prompts."""
