@@ -139,6 +139,34 @@ promptdiff rollback summarizer 2 -m "revert tone experiment"
 promptdiff rm old-prompt -y
 ```
 
+## File Tracking and Git Hooks
+
+Prompts usually live in source files. Link them once and promptdiff snapshots them automatically whenever they change:
+
+```bash
+# Link a prompt name to its source file (snapshots it immediately)
+promptdiff track summarizer prompts/summarizer.txt
+
+# See what is tracked and whether files drifted from the stored versions
+promptdiff tracked
+
+# Snapshot every tracked file whose content changed
+promptdiff sync -m "tuned tone"
+
+# Stop tracking (stored versions are kept)
+promptdiff untrack summarizer
+```
+
+Install the git pre-commit hook and never lose a prompt version again. Every commit runs `promptdiff sync --quiet` first, so prompt edits are versioned alongside your code:
+
+```bash
+promptdiff hook install     # refuses to clobber a foreign hook unless --force
+promptdiff hook status
+promptdiff hook uninstall   # only removes hooks promptdiff created
+```
+
+Missing files are reported but never block a commit.
+
 ## Similarity Scoring
 
 Beyond line-level text diffs, `promptdiff` computes similarity between versions:
@@ -235,6 +263,11 @@ def test_prompt_similarity():
 | `promptdiff eval <name> <version>` | Evaluate a prompt version |
 | `promptdiff export [name] [-o file]` | Export prompts to JSON or JSONL |
 | `promptdiff import <file> [--merge]` | Import prompts from a backup |
+| `promptdiff track <name> <file>` | Link a prompt to a source file and snapshot it |
+| `promptdiff untrack <name>` | Stop tracking a file (versions are kept) |
+| `promptdiff tracked` | List tracked files with sync status |
+| `promptdiff sync [-m "msg"] [--quiet]` | Snapshot all tracked files that changed |
+| `promptdiff hook install\|status\|uninstall` | Manage the git pre-commit auto-sync hook |
 
 ## License
 

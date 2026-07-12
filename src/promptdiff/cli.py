@@ -476,5 +476,158 @@ def import_cmd(file_path: str, merge: bool) -> None:
     console.print(f"[green]Imported {imported} version(s), skipped {skipped} prompt(s).[/green]")
 
 
+@cli.command("track")
+@click.argument("name")
+@click.argument("file_path", type=click.Path(exists=True))
+def track_cmd(name: str, file_path: str) -> None:
+    """Link a prompt NAME to a source FILE and snapshot it.
+
+    Once tracked, 'promptdiff sync' (and the git pre-commit hook) will
+    snapshot the file automatically whenever its content changes.
+    """
+    from promptdiff.tracking import FileTracker
+
+    store = _get_store()
+    tracker = FileTracker(store)
+    try:
+        result = tracker.track(name, file_path)
+    except (RuntimeError, FileNotFoundError) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise SystemExit(1)
+
+    if result.status == "added":
+        console.print(f"[green]Tracking '{name}' -> {result.path} (snapshotted as v{result.version})[/green]")
+    else:
+        console.print(f"[green]Tracking '{name}' -> {result.path} (already at v{result.version})[/green]")
+
+
+@cli.command("untrack")
+@click.argument("name")
+def untrack_cmd(name: str) -> None:
+    """Stop tracking a prompt's source file. Stored versions are kept."""
+    from promptdiff.tracking import FileTracker
+
+    store = _get_store()
+    tracker = FileTracker(store)
+    try:
+        tracker.untrack(name)
+    except (RuntimeError, KeyError) as exc:
+        msg = exc.args[0] if exc.args else str(exc)
+        console.print(f"[red]{msg}[/red]")
+        raise SystemExit(1)
+    console.print(f"[green]Stopped tracking '{name}'.[/green]")
+
+
+@cli.command("tracked")
+def tracked_cmd() -> None:
+    """List tracked files and their sync status."""
+    from promptdiff.tracking import FileTracker
+
+    store = _get_store()
+    tracker = FileTracker(store)
+    try:
+        tracked = tracker.list_tracked()
+    except RuntimeError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise SystemExit(1)
+
+    if not tracked:
+        console.print("[yellow]No tracked files. Use 'promptdiff track NAME FILE' to add one.[/yellow]")
+        return
+
+    table = Table(title="Tracked Files")
+    table.add_column("Name", style="cyan")
+    table.add_column("File", style="dim")
+    table.add_column("Status")
+
+    styles = {"in sync": "green", "modified": "yellow", "missing": "red", "new": "cyan"}
+    for name, path in sorted(tracked.items()):
+        status = tracker.status(name, path)
+        table.add_row(name, path, f"[{styles[status]}]{status}[/{styles[status]}]")
+
+    console.print(table)
+
+
+@cli.command("sync")
+@click.option("-m", "--message", default="", help="Message for new versions")
+@click.option("--quiet", is_flag=True, help="Only print when versions are added. Hook-friendly.")
+def sync_cmd(message: str, quiet: bool) -> None:
+    """Snapshot all tracked files whose content changed.
+
+    Never fails on missing files, so it is safe to run from a git
+    pre-commit hook.
+    """
+    from promptdiff.tracking import FileTracker
+
+    store = _get_store()
+    tracker = FileTracker(store)
+    try:
+        results = tracker.sync(message=message)
+    except RuntimeError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise SystemExit(1)
+
+    if not results:
+        if not quiet:
+            console.print("[yellow]No tracked files. Use 'promptdiff track NAME FILE' to add one.[/yellow]")
+        return
+
+    added = 0
+    for r in results:
+        if r.status == "added":
+            added += 1
+            console.print(f"[green]Synced '{r.name}' -> v{r.version}[/green] ({r.path})")
+        elif r.status == "missing":
+            console.print(f"[red]Missing file for '{r.name}': {r.path}[/red]")
+        elif not quiet:
+            console.print(f"[dim]'{r.name}' unchanged (v{r.version})[/dim]")
+
+    if not quiet or added:
+        console.print(f"Synced {added} of {len(results)} tracked prompt(s).")
+
+
+@cli.group("hook")
+def hook_group() -> None:
+    """Manage the git pre-commit hook that auto-syncs tracked prompts."""
+
+
+@hook_group.command("install")
+@click.option("--force", is_flag=True, help="Overwrite an existing foreign pre-commit hook.")
+def hook_install_cmd(force: bool) -> None:
+    """Install a pre-commit hook that runs 'promptdiff sync --quiet'."""
+    from promptdiff import hooks
+
+    try:
+        path = hooks.install_hook(Path.cwd(), force=force)
+    except (FileNotFoundError, FileExistsError) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise SystemExit(1)
+    console.print(f"[green]Installed pre-commit hook at {path}[/green]")
+
+
+@hook_group.command("uninstall")
+def hook_uninstall_cmd() -> None:
+    """Remove the promptdiff pre-commit hook."""
+    from promptdiff import hooks
+
+    try:
+        path = hooks.uninstall_hook(Path.cwd())
+    except (FileNotFoundError, RuntimeError) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise SystemExit(1)
+    console.print(f"[green]Removed pre-commit hook at {path}[/green]")
+
+
+@hook_group.command("status")
+def hook_status_cmd() -> None:
+    """Show whether the promptdiff pre-commit hook is installed."""
+    from promptdiff import hooks
+
+    if hooks.is_installed(Path.cwd()):
+        console.print("[green]promptdiff pre-commit hook is installed.[/green]")
+    else:
+        console.print("[yellow]No promptdiff pre-commit hook installed. Run 'promptdiff hook install'.[/yellow]")
+
+
 if __name__ == "__main__":
     cli()

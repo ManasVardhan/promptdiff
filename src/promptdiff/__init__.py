@@ -7,6 +7,7 @@ from promptdiff.diff import PromptDiff
 from promptdiff.registry import PromptRegistry
 from promptdiff.changelog import ChangelogGenerator
 from promptdiff.eval import PromptTestCase
+from promptdiff.tracking import FileTracker, SyncResult
 
 # Backward-compatible alias
 TestCase = PromptTestCase
@@ -18,5 +19,7 @@ __all__ = [
     "ChangelogGenerator",
     "PromptTestCase",
     "TestCase",
+    "FileTracker",
+    "SyncResult",
     "__version__",
 ]

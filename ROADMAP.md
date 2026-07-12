@@ -1,9 +1,11 @@
 # Roadmap: promptdiff
 
-## v0.2 (Planned)
+## Shipped
 
 ### 🪝 Git Hooks Integration
-Pre-commit and pre-push hooks that automatically track prompt changes alongside code, ensuring prompt versions are never lost.
+`promptdiff track` links prompt names to source files, `promptdiff sync` snapshots changed files, and `promptdiff hook install` adds a pre-commit hook that runs the sync automatically, ensuring prompt versions are never lost.
+
+## v0.2 (Planned)
 
 ### 🤖 CI/CD GitHub Action
 A GitHub Action that runs `promptdiff` on pull requests, posting a summary of prompt changes as a PR comment for easy review.
