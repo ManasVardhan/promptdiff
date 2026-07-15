@@ -1,0 +1,42 @@
+# Example GitHub Actions workflow for promptdiff.
+#
+# On every pull request it generates a markdown summary of prompt changes
+# made since the PR branched off, publishes it to the job's step summary,
+# and fails the build if any prompt drifted below 40% similarity.
+#
+# Copy this file to .github/workflows/promptdiff.yml in your repository.
+
+name: Prompt Change Report
+
+on:
+  pull_request:
+
+jobs:
+  prompt-report:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install promptdiff
+        run: pip install llm-promptdiff
+
+      - name: Find merge-base date
+        id: base
+        run: |
+          BASE_SHA=$(git merge-base origin/${{ github.base_ref }} HEAD)
+          BASE_DATE=$(git show -s --format=%cI "$BASE_SHA")
+          echo "date=$BASE_DATE" >> "$GITHUB_OUTPUT"
+
+      - name: Generate prompt change report
+        run: |
+          promptdiff ci-report \
+            --since "${{ steps.base.outputs.date }}" \
+            --fail-below 0.4 \
+            -o report.md
+          cat report.md >> "$GITHUB_STEP_SUMMARY"

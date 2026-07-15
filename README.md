@@ -167,6 +167,28 @@ promptdiff hook uninstall   # only removes hooks promptdiff created
 
 Missing files are reported but never block a commit.
 
+## CI Reports and PR Gates
+
+Summarize prompt changes since a date and post the result to a pull request. Designed for CI pipelines:
+
+```bash
+# Markdown report of everything that changed since July 1
+promptdiff ci-report --since 2026-07-01
+
+# JSON for machine consumption
+promptdiff ci-report --since 2026-07-01T12:00:00 --format json
+
+# Write to a file (drop into $GITHUB_STEP_SUMMARY or a PR comment)
+promptdiff ci-report --since 2026-07-01 -o report.md
+
+# Gate the build: exit 1 if any prompt drifted below 40% similarity
+promptdiff ci-report --since 2026-07-01 --fail-below 0.4
+```
+
+The report compares each prompt's last version at the reference point against its latest version: a summary table (versions, character-level similarity, line changes) plus the version messages written along the way. New prompts are listed but never fail the similarity gate.
+
+A ready-to-copy GitHub Actions workflow that runs on every PR and publishes the report to the step summary lives in [`examples/github-actions-prompt-report.yml`](examples/github-actions-prompt-report.yml).
+
 ## Similarity Scoring
 
 Beyond line-level text diffs, `promptdiff` computes similarity between versions:
@@ -268,6 +290,7 @@ def test_prompt_similarity():
 | `promptdiff tracked` | List tracked files with sync status |
 | `promptdiff sync [-m "msg"] [--quiet]` | Snapshot all tracked files that changed |
 | `promptdiff hook install\|status\|uninstall` | Manage the git pre-commit auto-sync hook |
+| `promptdiff ci-report --since <date> [--fail-below X]` | Markdown/JSON change report and CI similarity gate |
 
 ## License
 

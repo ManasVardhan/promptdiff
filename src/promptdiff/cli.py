@@ -629,5 +629,70 @@ def hook_status_cmd() -> None:
         console.print("[yellow]No promptdiff pre-commit hook installed. Run 'promptdiff hook install'.[/yellow]")
 
 
+@cli.command("ci-report")
+@click.option(
+    "--since",
+    "since_str",
+    required=True,
+    help="ISO date or datetime (e.g. 2026-07-01 or 2026-07-01T12:00:00). "
+    "Report versions created after this point.",
+)
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["markdown", "json"]),
+    default="markdown",
+    help="Output format.",
+)
+@click.option("--output", "-o", type=click.Path(), help="Write report to a file instead of stdout.")
+@click.option(
+    "--fail-below",
+    type=click.FloatRange(0.0, 1.0),
+    default=None,
+    help="Exit 1 if any changed prompt's similarity to its base version falls below this value.",
+)
+def ci_report_cmd(since_str: str, fmt: str, output: str | None, fail_below: float | None) -> None:
+    """Summarize prompt changes since a date, for PR comments and CI gates.
+
+    Designed for CI: post the markdown output as a pull request comment
+    or GitHub step summary, and use --fail-below to block merges when a
+    prompt changed more than expected.
+    """
+    from promptdiff.ci import collect_changes, failing_changes, parse_since, render_json, render_markdown
+
+    try:
+        since = parse_since(since_str)
+    except ValueError:
+        console.print(f"[red]Invalid --since value: '{since_str}'. Use an ISO date like 2026-07-01.[/red]")
+        raise SystemExit(1)
+
+    store = _get_store()
+    try:
+        changes = collect_changes(store, since)
+    except RuntimeError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise SystemExit(1)
+
+    report = render_json(changes, since) if fmt == "json" else render_markdown(changes, since)
+
+    if output:
+        Path(output).write_text(report)
+        console.print(f"[green]Report written to {output}[/green]")
+    else:
+        click.echo(report)
+
+    if fail_below is not None:
+        failures = failing_changes(changes, fail_below)
+        if failures:
+            for change in failures:
+                console.print(
+                    f"[red]FAIL: '{change.name}' similarity {change.similarity:.1%} "
+                    f"is below threshold {fail_below:.1%} "
+                    f"(v{change.base_version} -> v{change.head_version})[/red]",
+                    highlight=False,
+                )
+            raise SystemExit(1)
+
+
 if __name__ == "__main__":
     cli()
