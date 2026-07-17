@@ -55,6 +55,18 @@ class PromptRegistry:
         existing = self.get_tags(name)
         self.set_tags(name, existing + tags)
 
+    def remove_tags(self, name: str, tags: list[str]) -> list[str]:
+        """Remove *tags* from the prompt's tag set. Unknown tags are ignored.
+
+        Returns:
+            The tags that were actually removed.
+        """
+        existing = self.get_tags(name)
+        to_remove = set(tags)
+        removed = [t for t in existing if t in to_remove]
+        self.set_tags(name, [t for t in existing if t not in to_remove])
+        return removed
+
     def find_by_tag(self, tag: str) -> list[str]:
         """Return a list of prompt names that have the given *tag*."""
         results = []

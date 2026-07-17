@@ -14,6 +14,7 @@ from promptdiff import __version__
 from promptdiff.changelog import ChangelogGenerator
 from promptdiff.diff import PromptDiff
 from promptdiff.eval import PromptEvaluator, TestCase
+from promptdiff.registry import PromptRegistry
 from promptdiff.store import PromptStore
 
 console = Console()
@@ -64,26 +65,51 @@ def add(name: str, message: str, file_path: str | None, tag: tuple[str, ...]) ->
     info = store.add(name, content, message=message)
 
     if tag:
-        from promptdiff.registry import PromptRegistry
         registry = PromptRegistry(store)
-        registry.set_tags(name, list(tag))
+        # Merge with existing tags: adding a new version must not silently
+        # wipe tags assigned earlier.
+        registry.add_tags(name, list(tag))
 
     console.print(
-        f"[green]Added {name} v{info.version}[/green] [{info.content_hash}]"
+        f"[green]Added {name} v{info.version}[/green] \\[{info.content_hash}]"
     )
 
 
 @cli.command("diff")
 @click.argument("name")
-@click.argument("v1", type=int)
-@click.argument("v2", type=int)
-def diff_cmd(name: str, v1: int, v2: int) -> None:
-    """Show diff between two prompt versions."""
+@click.argument("v1", type=int, required=False)
+@click.argument("v2", type=int, required=False)
+def diff_cmd(name: str, v1: int | None, v2: int | None) -> None:
+    """Show diff between two prompt versions.
+
+    With both versions omitted, compares the previous version to the
+    latest. With only V1 given, compares V1 to the latest.
+    """
     store = _get_store()
     differ = PromptDiff()
 
-    old = store.get_version(name, v1)
-    new = store.get_version(name, v2)
+    try:
+        latest = store.get_version(name)
+    except (FileNotFoundError, ValueError, RuntimeError) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise SystemExit(1)
+
+    if v1 is None:
+        if latest.version < 2:
+            console.print(
+                f"[yellow]'{name}' has only one version; nothing to diff.[/yellow]"
+            )
+            return
+        v1 = latest.version - 1
+    if v2 is None:
+        v2 = latest.version
+
+    try:
+        old = store.get_version(name, v1)
+        new = store.get_version(name, v2)
+    except (FileNotFoundError, ValueError) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise SystemExit(1)
 
     result = differ.full_diff(old.content, new.content, v1, v2)
 
@@ -158,7 +184,7 @@ def show_cmd(name: str, version: int | None, raw: bool) -> None:
         click.echo(info.content, nl=False)
         return
 
-    console.print(f"[bold cyan]{name} v{info.version}[/bold cyan] [{info.content_hash}]")
+    console.print(f"[bold cyan]{name} v{info.version}[/bold cyan] \\[{info.content_hash}]")
     if info.message:
         console.print(f"[dim]{info.message}[/dim]")
     if info.timestamp:
@@ -193,7 +219,7 @@ def rollback_cmd(name: str, version: int, message: str) -> None:
 
     info = store.add(name, old.content, message=message or f"Rollback to v{version}")
     console.print(
-        f"[green]Rolled back {name} to v{version} as new v{info.version}[/green] [{info.content_hash}]"
+        f"[green]Rolled back {name} to v{version} as new v{info.version}[/green] \\[{info.content_hash}]"
     )
 
 
@@ -231,7 +257,6 @@ def list_cmd() -> None:
     table.add_column("Versions", justify="right")
     table.add_column("Latest", style="green")
 
-    from promptdiff.registry import PromptRegistry
     registry = PromptRegistry(store)
 
     for info in registry.list_all():
@@ -298,7 +323,6 @@ def export_cmd(name: str | None, output_path: str | None, fmt: str) -> None:
         console.print("[yellow]No prompts to export.[/yellow]")
         return
 
-    from promptdiff.registry import PromptRegistry
     registry = PromptRegistry(store)
 
     export_data: list[dict] = []
@@ -350,7 +374,6 @@ def search_cmd(query: str, tag_filter: str | None, search_content: bool) -> None
     within prompt text. Use --tag to filter by tag.
     """
     store = _get_store()
-    from promptdiff.registry import PromptRegistry
     registry = PromptRegistry(store)
 
     prompts = store.list_prompts()
@@ -433,7 +456,6 @@ def import_cmd(file_path: str, merge: bool) -> None:
     to the current store. Existing prompts are skipped unless --merge is set.
     """
     store = _get_store()
-    from promptdiff.registry import PromptRegistry
     registry = PromptRegistry(store)
 
     raw = Path(file_path).read_text()
@@ -627,6 +649,88 @@ def hook_status_cmd() -> None:
         console.print("[green]promptdiff pre-commit hook is installed.[/green]")
     else:
         console.print("[yellow]No promptdiff pre-commit hook installed. Run 'promptdiff hook install'.[/yellow]")
+
+
+@cli.group("tag")
+def tag_group() -> None:
+    """View and manage prompt tags."""
+
+
+def _get_registry_and_check(name: str) -> tuple["PromptRegistry", list[str]]:
+    """Return (registry, tags) for *name*, exiting with an error if missing."""
+    registry = PromptRegistry(_get_store())
+    try:
+        tags = registry.get_tags(name)
+    except (FileNotFoundError, RuntimeError) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise SystemExit(1)
+    return registry, tags
+
+
+@tag_group.command("add")
+@click.argument("name")
+@click.argument("tags", nargs=-1, required=True)
+def tag_add_cmd(name: str, tags: tuple[str, ...]) -> None:
+    """Add one or more TAGS to a prompt."""
+    registry, _ = _get_registry_and_check(name)
+    registry.add_tags(name, list(tags))
+    current = ", ".join(registry.get_tags(name))
+    console.print(f"[green]Tags for '{name}':[/green] {current}")
+
+
+@tag_group.command("rm")
+@click.argument("name")
+@click.argument("tags", nargs=-1, required=True)
+def tag_rm_cmd(name: str, tags: tuple[str, ...]) -> None:
+    """Remove one or more TAGS from a prompt."""
+    registry, _ = _get_registry_and_check(name)
+    removed = registry.remove_tags(name, list(tags))
+    if not removed:
+        console.print(f"[yellow]No matching tags on '{name}'.[/yellow]")
+        return
+    current = ", ".join(registry.get_tags(name)) or "(none)"
+    console.print(
+        f"[green]Removed {', '.join(removed)}.[/green] Tags for '{name}': {current}"
+    )
+
+
+@tag_group.command("list")
+@click.argument("name", required=False)
+def tag_list_cmd(name: str | None) -> None:
+    """List tags for a prompt, or all tags across the store."""
+    store = _get_store()
+    registry = PromptRegistry(store)
+
+    if name is not None:
+        _, tags = _get_registry_and_check(name)
+        if not tags:
+            console.print(f"[yellow]'{name}' has no tags.[/yellow]")
+            return
+        for t in tags:
+            click.echo(t)
+        return
+
+    try:
+        prompts = store.list_prompts()
+    except RuntimeError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise SystemExit(1)
+
+    counts: dict[str, int] = {}
+    for prompt_name in prompts:
+        for t in registry.get_tags(prompt_name):
+            counts[t] = counts.get(t, 0) + 1
+
+    if not counts:
+        console.print("[yellow]No tags in this store yet.[/yellow]")
+        return
+
+    table = Table(title="Tags")
+    table.add_column("Tag", style="cyan")
+    table.add_column("Prompts", justify="right")
+    for t in sorted(counts):
+        table.add_row(t, str(counts[t]))
+    console.print(table)
 
 
 @cli.command("ci-report")

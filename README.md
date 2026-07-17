@@ -52,7 +52,10 @@ Text: {text}
 
 Summary:" | promptdiff add summarizer -m "Added role and structure"
 
-# See what changed
+# See what changed (defaults to previous vs latest)
+promptdiff diff summarizer
+
+# Or pick versions explicitly
 promptdiff diff summarizer 1 2
 ```
 
@@ -82,6 +85,12 @@ promptdiff list
 
 # Generate a changelog
 promptdiff changelog summarizer
+
+# Tag prompts and manage tags over time
+promptdiff tag add summarizer prod reviewed
+promptdiff tag rm summarizer reviewed
+promptdiff tag list              # all tags with prompt counts
+promptdiff tag list summarizer   # tags for one prompt
 ```
 
 ## Python API
@@ -275,12 +284,13 @@ def test_prompt_similarity():
 | `promptdiff init` | Initialize a new promptdiff repository |
 | `promptdiff add <name> -m "msg"` | Add a new prompt version |
 | `promptdiff show <name> [-v N] [--raw]` | Print a prompt version's content |
-| `promptdiff diff <name> <v1> <v2>` | Show diff between versions |
+| `promptdiff diff <name> [v1] [v2]` | Show diff between versions (defaults to previous vs latest) |
 | `promptdiff log <name>` | Show version history |
 | `promptdiff rollback <name> <version>` | Restore an old version as a new latest |
 | `promptdiff list` | List all tracked prompts |
 | `promptdiff rm <name> [-y]` | Delete a prompt and all its versions |
 | `promptdiff search <query> [--tag] [--content]` | Search prompts |
+| `promptdiff tag add\|rm\|list [name] [tags...]` | View and manage prompt tags |
 | `promptdiff changelog <name>` | Generate changelog |
 | `promptdiff eval <name> <version>` | Evaluate a prompt version |
 | `promptdiff export [name] [-o file]` | Export prompts to JSON or JSONL |
