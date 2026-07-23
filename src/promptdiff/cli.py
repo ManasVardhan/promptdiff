@@ -8,6 +8,7 @@ from pathlib import Path
 
 import click
 from rich.console import Console
+from rich.markup import escape
 from rich.table import Table
 
 from promptdiff import __version__
@@ -133,6 +134,121 @@ def diff_cmd(name: str, v1: int | None, v2: int | None) -> None:
         f"[bold]Changes:[/bold] [green]+{result.stats['additions']}[/green] "
         f"[red]-{result.stats['deletions']}[/red]"
     )
+
+
+@cli.command("semantic")
+@click.argument("name")
+@click.argument("v1", type=int, required=False)
+@click.argument("v2", type=int, required=False)
+@click.option(
+    "--backend",
+    type=click.Choice(["local", "openai"]),
+    default="local",
+    help="Similarity backend: offline lexical-semantic (local) or OpenAI embeddings.",
+)
+@click.option(
+    "--model",
+    default="text-embedding-3-small",
+    help="Embedding model name (openai backend only).",
+)
+@click.option(
+    "--fail-below",
+    type=click.FloatRange(0.0, 1.0),
+    default=None,
+    help="Exit 1 if similarity falls below this value. Useful as a CI gate.",
+)
+@click.option("--json-output", is_flag=True, help="Output machine-readable JSON.")
+def semantic_cmd(
+    name: str,
+    v1: int | None,
+    v2: int | None,
+    backend: str,
+    model: str,
+    fail_below: float | None,
+    json_output: bool,
+) -> None:
+    """Score semantic similarity between two prompt versions.
+
+    With both versions omitted, compares the previous version to the
+    latest. With only V1 given, compares V1 to the latest. The default
+    backend runs fully offline; use --backend openai for true embedding
+    similarity (requires the embeddings extra and OPENAI_API_KEY).
+    """
+    from promptdiff.semantic import compare_semantic
+
+    store = _get_store()
+
+    try:
+        latest = store.get_version(name)
+    except (FileNotFoundError, ValueError, RuntimeError) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise SystemExit(1)
+
+    if v1 is None:
+        if latest.version < 2:
+            console.print(
+                f"[yellow]'{name}' has only one version; nothing to compare.[/yellow]"
+            )
+            return
+        v1 = latest.version - 1
+    if v2 is None:
+        v2 = latest.version
+
+    try:
+        old = store.get_version(name, v1)
+        new = store.get_version(name, v2)
+    except (FileNotFoundError, ValueError) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise SystemExit(1)
+
+    try:
+        comparison = compare_semantic(old.content, new.content, backend=backend, model=model)
+    except ImportError as exc:
+        # escape() keeps rich from eating the literal [embeddings] extra
+        # in the install hint (bracket text parses as markup otherwise).
+        console.print(f"[red]{escape(str(exc))}[/red]")
+        raise SystemExit(1)
+    except Exception as exc:  # API/auth/network errors from the openai backend
+        console.print(f"[red]Semantic comparison failed: {escape(str(exc))}[/red]")
+        raise SystemExit(1)
+
+    below = fail_below is not None and comparison.similarity < fail_below
+
+    if json_output:
+        payload = {
+            "name": name,
+            "old_version": v1,
+            "new_version": v2,
+            "backend": comparison.backend,
+            "model": comparison.model,
+            "similarity": comparison.similarity,
+            "verdict": comparison.verdict,
+            "threshold": fail_below,
+            "passed": not below,
+        }
+        click.echo(json.dumps(payload, indent=2))
+    else:
+        console.print(f"\n[bold]Semantic: {name} v{v1} -> v{v2}[/bold]\n")
+        backend_label = comparison.backend + (f" ({comparison.model})" if comparison.model else "")
+        console.print(f"[bold]Backend:[/bold]    {backend_label}")
+        console.print(f"[bold]Similarity:[/bold] {comparison.similarity:.1%}")
+        verdict_styles = {
+            "equivalent": "green",
+            "minor change": "green",
+            "moderate change": "yellow",
+            "major change": "red",
+        }
+        style = verdict_styles.get(comparison.verdict, "white")
+        console.print(f"[bold]Verdict:[/bold]    [{style}]{comparison.verdict}[/{style}]")
+
+    if below:
+        assert fail_below is not None
+        console.print(
+            f"[red]FAIL: similarity {comparison.similarity:.1%} is below "
+            f"threshold {fail_below:.1%}[/red]",
+            highlight=False,
+        )
+        raise SystemExit(1)
 
 
 @cli.command()

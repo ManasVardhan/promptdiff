@@ -22,7 +22,7 @@ You iterate on prompts dozens of times. You tweak a system message, change a few
 
 - 📦 **Version Control** - Store and track every prompt version with messages and metadata
 - 🔀 **Smart Diffs** - Line-level text diffs with additions, deletions, and similarity scores
-- 🧠 **Similarity Scoring** - Word-overlap (Jaccard) similarity built in, OpenAI embeddings optional
+- 🧠 **Semantic Similarity** - Offline lexical-semantic scoring with change verdicts, OpenAI embeddings optional, CI gate via --fail-below
 - 🏷️ **Tags & Registry** - Organize prompts with tags, find them by name or label
 - 📊 **Evaluation** - Run prompt versions against test cases and score results
 - 📋 **Changelog** - Auto-generate version history with diff stats
@@ -207,6 +207,43 @@ Beyond line-level text diffs, `promptdiff` computes similarity between versions:
 
 The built-in scorer measures word overlap, which is useful for detecting surface-level changes. For actual semantic similarity (detecting meaning changes), use the optional embeddings integration.
 
+## Semantic Similarity
+
+The `semantic` command scores how much a prompt's meaning changed between versions and buckets the score into a verdict (`equivalent`, `minor change`, `moderate change`, `major change`):
+
+```bash
+# Compare previous vs latest with the offline backend (default)
+promptdiff semantic summarizer
+
+# Compare explicit versions
+promptdiff semantic summarizer 1 3
+
+# True embedding similarity via OpenAI (needs the embeddings extra + OPENAI_API_KEY)
+promptdiff semantic summarizer --backend openai --model text-embedding-3-small
+
+# CI gate: exit 1 if the prompt drifted below 80% similarity
+promptdiff semantic summarizer --fail-below 0.8
+
+# Machine-readable output for scripts
+promptdiff semantic summarizer --json-output
+```
+
+Two backends:
+
+- **local** (default, offline, deterministic): cosine similarity over word unigrams, word bigrams, and character trigrams with sublinear TF weighting. Much stronger than plain word overlap: bigrams capture phrasing, character trigrams tolerate small spelling and inflection changes.
+- **openai**: cosine similarity between real embeddings, for detecting deeper meaning changes. Requires `pip install 'llm-promptdiff[embeddings]'`.
+
+The same scoring is available from Python:
+
+```python
+from promptdiff import compare_semantic
+
+result = compare_semantic(old_text, new_text)          # local backend
+print(result.similarity, result.verdict)
+
+result = compare_semantic(old_text, new_text, backend="openai")
+```
+
 ## Evaluation
 
 Run prompt versions against test cases to catch regressions:
@@ -285,6 +322,7 @@ def test_prompt_similarity():
 | `promptdiff add <name> -m "msg"` | Add a new prompt version |
 | `promptdiff show <name> [-v N] [--raw]` | Print a prompt version's content |
 | `promptdiff diff <name> [v1] [v2]` | Show diff between versions (defaults to previous vs latest) |
+| `promptdiff semantic <name> [v1] [v2] [--backend openai] [--fail-below X]` | Score semantic similarity with a change verdict |
 | `promptdiff log <name>` | Show version history |
 | `promptdiff rollback <name> <version>` | Restore an old version as a new latest |
 | `promptdiff list` | List all tracked prompts |
