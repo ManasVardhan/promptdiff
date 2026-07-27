@@ -20,16 +20,41 @@ from promptdiff.store import PromptStore
 
 console = Console()
 
+_store_root: Path | None = None
+
 
 def _get_store() -> PromptStore:
-    return PromptStore(Path.cwd())
+    return PromptStore(_store_root or Path.cwd())
 
 
 @click.group()
 @click.version_option(version=__version__, package_name="llm-promptdiff")
-def cli() -> None:
+@click.option(
+    "-S",
+    "--store",
+    "store_path",
+    type=click.Path(file_okay=False),
+    envvar="PROMPTDIFF_STORE",
+    default=None,
+    help=(
+        "Directory containing the .promptdiff store. Defaults to the current "
+        "directory. Can also be set via the PROMPTDIFF_STORE environment "
+        "variable to share one prompt registry across projects."
+    ),
+)
+def cli(store_path: str | None) -> None:
     """promptdiff - Git-style version control for LLM prompts."""
-    pass
+    global _store_root
+    _store_root = Path(store_path).expanduser() if store_path else None
+
+
+def main() -> None:
+    """Console entry point: render store errors cleanly instead of tracebacks."""
+    try:
+        cli()
+    except RuntimeError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise SystemExit(1)
 
 
 @cli.command()
@@ -359,8 +384,9 @@ def rm_cmd(name: str, yes: bool) -> None:
 
 
 @cli.command("list")
-def list_cmd() -> None:
-    """List all tracked prompts."""
+@click.option("-t", "--tag", default=None, help="Only show prompts with this tag")
+def list_cmd(tag: str | None) -> None:
+    """List all tracked prompts, optionally filtered by tag."""
     store = _get_store()
     prompts = store.list_prompts()
 
@@ -368,15 +394,28 @@ def list_cmd() -> None:
         console.print("[yellow]No prompts tracked yet.[/yellow]")
         return
 
-    table = Table(title="Tracked Prompts")
+    registry = PromptRegistry(store)
+    infos = registry.list_all()
+    if tag is not None:
+        infos = [info for info in infos if tag in info["tags"]]
+        if not infos:
+            console.print(f"[yellow]No prompts with tag '{tag}'.[/yellow]")
+            return
+
+    title = "Tracked Prompts" if tag is None else f"Tracked Prompts (tag: {tag})"
+    table = Table(title=title)
     table.add_column("Name", style="cyan")
     table.add_column("Versions", justify="right")
     table.add_column("Latest", style="green")
+    table.add_column("Tags", style="dim")
 
-    registry = PromptRegistry(store)
-
-    for info in registry.list_all():
-        table.add_row(info["name"], str(info["total_versions"]), f"v{info['latest_version']}")
+    for info in infos:
+        table.add_row(
+            info["name"],
+            str(info["total_versions"]),
+            f"v{info['latest_version']}",
+            ", ".join(info["tags"]) if info["tags"] else "-",
+        )
 
     console.print(table)
 

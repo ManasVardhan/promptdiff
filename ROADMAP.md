@@ -11,10 +11,13 @@
 ### 🤖 CI/CD Reports
 `promptdiff ci-report --since <date>` generates markdown or JSON summaries of prompt changes for PR comments and step summaries, with `--fail-below` as a similarity gate for CI. Ships with a ready-to-copy GitHub Actions workflow in `examples/`.
 
+### 📂 Prompt Registry
+Local prompt registry to store, version, and retrieve prompt templates by name and tag across projects. A single shared store can be selected from any directory with the global `--store` flag or the `PROMPTDIFF_STORE` environment variable, `promptdiff list` shows tags and filters with `--tag`, and `export` / `import` move prompts between registries.
+
 ## v0.2 (Planned)
 
-### 📂 Prompt Registry
-Local or remote prompt registry to store, version, and retrieve prompt templates by name and tag across projects.
+### 🌐 Remote Registry Backends
+Push and pull prompts against a remote registry (git or HTTP backed) so teams can share one source of truth.
 
 ---
 

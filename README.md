@@ -24,6 +24,7 @@ You iterate on prompts dozens of times. You tweak a system message, change a few
 - 🔀 **Smart Diffs** - Line-level text diffs with additions, deletions, and similarity scores
 - 🧠 **Semantic Similarity** - Offline lexical-semantic scoring with change verdicts, OpenAI embeddings optional, CI gate via --fail-below
 - 🏷️ **Tags & Registry** - Organize prompts with tags, find them by name or label
+- 📂 **Shared Registry** - Point every project at one store with `--store` or `PROMPTDIFF_STORE`
 - 📊 **Evaluation** - Run prompt versions against test cases and score results
 - 📋 **Changelog** - Auto-generate version history with diff stats
 - 💻 **CLI First** - Beautiful terminal output powered by Rich
@@ -147,6 +148,25 @@ promptdiff rollback summarizer 2 -m "revert tone experiment"
 # Remove a prompt entirely (asks for confirmation without -y)
 promptdiff rm old-prompt -y
 ```
+
+## Shared Registry Across Projects
+
+By default promptdiff uses the `.promptdiff/` store in the current directory. To share one prompt registry across every project, point commands at a common store with the global `--store` flag or the `PROMPTDIFF_STORE` environment variable (the flag wins when both are set):
+
+```bash
+# One-time setup of a central registry
+promptdiff --store ~/prompt-registry init
+
+# Use it from any project directory
+promptdiff --store ~/prompt-registry add summarizer -t prod -f prompts/summarizer.txt
+
+# Or set it once per shell / CI job and drop the flag
+export PROMPTDIFF_STORE=~/prompt-registry
+promptdiff list --tag prod
+promptdiff show summarizer --raw
+```
+
+`promptdiff list` shows each prompt's tags, and `--tag` filters the listing, so a central registry stays navigable as it grows. Combined with `export` / `import` for backups, this completes the prompt registry workflow: store, version, and retrieve prompts by name and tag across projects.
 
 ## File Tracking and Git Hooks
 
@@ -325,7 +345,8 @@ def test_prompt_similarity():
 | `promptdiff semantic <name> [v1] [v2] [--backend openai] [--fail-below X]` | Score semantic similarity with a change verdict |
 | `promptdiff log <name>` | Show version history |
 | `promptdiff rollback <name> <version>` | Restore an old version as a new latest |
-| `promptdiff list` | List all tracked prompts |
+| `promptdiff list [--tag T]` | List all tracked prompts, optionally filtered by tag |
+| `promptdiff --store <dir> <command>` | Run any command against a shared store (or set `PROMPTDIFF_STORE`) |
 | `promptdiff rm <name> [-y]` | Delete a prompt and all its versions |
 | `promptdiff search <query> [--tag] [--content]` | Search prompts |
 | `promptdiff tag add\|rm\|list [name] [tags...]` | View and manage prompt tags |
