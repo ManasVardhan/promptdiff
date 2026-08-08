@@ -14,10 +14,13 @@
 ### 📂 Prompt Registry
 Local prompt registry to store, version, and retrieve prompt templates by name and tag across projects. A single shared store can be selected from any directory with the global `--store` flag or the `PROMPTDIFF_STORE` environment variable, `promptdiff list` shows tags and filters with `--tag`, and `export` / `import` move prompts between registries.
 
+### 🌐 Remote Registry Backends
+`promptdiff remote add / rm / list` plus `push` and `pull` sync prompts against remote registries: directory remotes (any path holding a store), git remotes (cloned, synced, committed, and pushed automatically), and pull-only HTTP remotes serving JSON exports. Sync is merge-based and idempotent, matching versions by content hash and merging tags as a union, so teams can share one source of truth without ever duplicating history.
+
 ## v0.2 (Planned)
 
-### 🌐 Remote Registry Backends
-Push and pull prompts against a remote registry (git or HTTP backed) so teams can share one source of truth.
+### 🔐 Signed Prompt Releases
+Tag a prompt version as a named release (e.g. `prod-2026-08`) with an integrity checksum, list and diff releases, and verify that a deployed prompt matches its release before serving traffic.
 
 ---
 

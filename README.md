@@ -25,6 +25,7 @@ You iterate on prompts dozens of times. You tweak a system message, change a few
 - 🧠 **Semantic Similarity** - Offline lexical-semantic scoring with change verdicts, OpenAI embeddings optional, CI gate via --fail-below
 - 🏷️ **Tags & Registry** - Organize prompts with tags, find them by name or label
 - 📂 **Shared Registry** - Point every project at one store with `--store` or `PROMPTDIFF_STORE`
+- 🌐 **Remote Registries** - Push and pull prompts between machines via directory, git, or HTTP remotes
 - 📊 **Evaluation** - Run prompt versions against test cases and score results
 - 📋 **Changelog** - Auto-generate version history with diff stats
 - 💻 **CLI First** - Beautiful terminal output powered by Rich
@@ -167,6 +168,29 @@ promptdiff show summarizer --raw
 ```
 
 `promptdiff list` shows each prompt's tags, and `--tag` filters the listing, so a central registry stays navigable as it grows. Combined with `export` / `import` for backups, this completes the prompt registry workflow: store, version, and retrieve prompts by name and tag across projects.
+
+## Remote Registries
+
+Share one source of truth across machines and teammates. Register a remote once, then `push` and `pull` like git:
+
+```bash
+# A directory remote: any path that holds a promptdiff store
+# (network share, Dropbox folder, second checkout)
+promptdiff remote add origin /Volumes/shared/prompt-registry
+
+# Or a git remote: a repository whose root holds the store
+promptdiff remote add origin git@github.com:acme/prompt-registry.git
+
+# Or an HTTP remote: a URL serving a JSON export (pull-only)
+promptdiff remote add hosted https://prompts.acme.dev/export.json
+
+promptdiff push                  # push everything to origin
+promptdiff push origin -p greet  # push a single prompt
+promptdiff pull                  # pull everything from origin
+promptdiff remote list           # show remotes and their backends
+```
+
+Sync is merge-based and idempotent: versions are matched by content hash, so pushing or pulling twice never duplicates history. Tags are merged as a union of both sides, and existing local versions are never overwritten. Git remotes are cloned to a temporary directory, synced, committed, and pushed automatically.
 
 ## File Tracking and Git Hooks
 
@@ -359,6 +383,9 @@ def test_prompt_similarity():
 | `promptdiff tracked` | List tracked files with sync status |
 | `promptdiff sync [-m "msg"] [--quiet]` | Snapshot all tracked files that changed |
 | `promptdiff hook install\|status\|uninstall` | Manage the git pre-commit auto-sync hook |
+| `promptdiff remote add\|rm\|list` | Manage remote registries (directory, git, or HTTP backed) |
+| `promptdiff push [remote] [-p name]` | Push prompts to a remote registry |
+| `promptdiff pull [remote] [-p name]` | Pull prompts from a remote registry |
 | `promptdiff ci-report --since <date> [--fail-below X]` | Markdown/JSON change report and CI similarity gate |
 
 ## License

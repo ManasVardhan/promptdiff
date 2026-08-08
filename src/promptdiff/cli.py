@@ -888,6 +888,131 @@ def tag_list_cmd(name: str | None) -> None:
     console.print(table)
 
 
+@cli.group("remote")
+def remote_group() -> None:
+    """Manage remote registries (directory, git, or HTTP backed)."""
+
+
+@remote_group.command("add")
+@click.argument("name")
+@click.argument("url")
+def remote_add_cmd(name: str, url: str) -> None:
+    """Register a remote registry under NAME.
+
+    URL may be a directory path (another promptdiff store root), a git
+    URL ending in .git, or an http(s) URL serving a JSON export.
+    """
+    from promptdiff import remote
+
+    store = _get_store()
+    try:
+        remote.add_remote(store, name, url)
+    except remote.RemoteError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise SystemExit(1)
+    backend = remote.detect_backend(url)
+    console.print(f"[green]Added remote '{name}' -> {url} ({backend} backend)[/green]")
+
+
+@remote_group.command("rm")
+@click.argument("name")
+def remote_rm_cmd(name: str) -> None:
+    """Remove a remote registry by NAME."""
+    from promptdiff import remote
+
+    store = _get_store()
+    try:
+        url = remote.remove_remote(store, name)
+    except remote.RemoteError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise SystemExit(1)
+    console.print(f"[green]Removed remote '{name}' ({url}).[/green]")
+
+
+@remote_group.command("list")
+def remote_list_cmd() -> None:
+    """List configured remotes."""
+    from promptdiff import remote
+
+    store = _get_store()
+    remotes = remote.load_remotes(store)
+    if not remotes:
+        console.print(
+            "[yellow]No remotes configured. Use 'promptdiff remote add NAME URL'.[/yellow]"
+        )
+        return
+
+    table = Table(title="Remotes")
+    table.add_column("Name", style="cyan")
+    table.add_column("URL", style="dim")
+    table.add_column("Backend", style="green")
+    for name in sorted(remotes):
+        table.add_row(name, remotes[name], remote.detect_backend(remotes[name]))
+    console.print(table)
+
+
+def _print_sync_results(results: list, direction: str) -> None:
+    """Render SyncResult rows and a summary line for push/pull."""
+    styles = {"new": "cyan", "updated": "green", "up to date": "dim"}
+    added_total = 0
+    for r in results:
+        style = styles.get(r.status, "white")
+        suffix = f" (+{r.added_versions} version(s))" if r.added_versions else ""
+        console.print(f"[{style}]{r.status}[/{style}]  {r.name}{suffix}")
+        added_total += r.added_versions
+    console.print(
+        f"{direction} {added_total} new version(s) across {len(results)} prompt(s)."
+    )
+
+
+@cli.command("push")
+@click.argument("remote_name", default="origin")
+@click.option("-p", "--prompt", "prompts", multiple=True, help="Only push these prompts.")
+def push_cmd(remote_name: str, prompts: tuple[str, ...]) -> None:
+    """Push local prompts to a remote registry (default remote: origin).
+
+    Sync is merge-based and idempotent: versions are matched by content
+    hash, so pushing twice never duplicates history.
+    """
+    from promptdiff import remote
+
+    store = _get_store()
+    try:
+        results = remote.push(store, remote_name, list(prompts) or None)
+    except remote.RemoteError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise SystemExit(1)
+
+    if not results:
+        console.print("[yellow]No prompts to push.[/yellow]")
+        return
+    _print_sync_results(results, "Pushed")
+
+
+@cli.command("pull")
+@click.argument("remote_name", default="origin")
+@click.option("-p", "--prompt", "prompts", multiple=True, help="Only pull these prompts.")
+def pull_cmd(remote_name: str, prompts: tuple[str, ...]) -> None:
+    """Pull prompts from a remote registry (default remote: origin).
+
+    Works with directory, git, and HTTP (JSON export) remotes. Existing
+    local versions are never overwritten, new versions are appended.
+    """
+    from promptdiff import remote
+
+    store = _get_store()
+    try:
+        results = remote.pull(store, remote_name, list(prompts) or None)
+    except remote.RemoteError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise SystemExit(1)
+
+    if not results:
+        console.print("[yellow]Remote has no prompts to pull.[/yellow]")
+        return
+    _print_sync_results(results, "Pulled")
+
+
 @cli.command("ci-report")
 @click.option(
     "--since",
