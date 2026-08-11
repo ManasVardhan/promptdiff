@@ -26,6 +26,7 @@ You iterate on prompts dozens of times. You tweak a system message, change a few
 - 🏷️ **Tags & Registry** - Organize prompts with tags, find them by name or label
 - 📂 **Shared Registry** - Point every project at one store with `--store` or `PROMPTDIFF_STORE`
 - 🌐 **Remote Registries** - Push and pull prompts between machines via directory, git, or HTTP remotes
+- 🔐 **Releases** - Pin prompt versions under stable names with SHA-256 checksums and verify deployments against them
 - 📊 **Evaluation** - Run prompt versions against test cases and score results
 - 📋 **Changelog** - Auto-generate version history with diff stats
 - 💻 **CLI First** - Beautiful terminal output powered by Rich
@@ -191,6 +192,32 @@ promptdiff remote list           # show remotes and their backends
 ```
 
 Sync is merge-based and idempotent: versions are matched by content hash, so pushing or pulling twice never duplicates history. Tags are merged as a union of both sides, and existing local versions are never overwritten. Git remotes are cloned to a temporary directory, synced, committed, and pushed automatically.
+
+## Prompt Releases
+
+Pin the exact prompt you shipped under a stable name, then prove at deploy time that production is serving exactly that prompt:
+
+```bash
+# Tag the latest version of a prompt as a release (or -v 3 for a specific one)
+promptdiff release create prod-2026-08 support-agent -m "August rollout"
+
+# See every release with its checksum
+promptdiff release list
+
+# Print the released content (great for piping into a deploy step)
+promptdiff release show prod-2026-08 --raw > deployed_prompt.txt
+
+# Gate a deploy: exit 1 unless the deployed file matches the release checksum
+promptdiff release verify prod-2026-08 --file deployed_prompt.txt
+
+# Or verify whatever a service is about to serve, straight from stdin
+curl -s https://internal/prompt | promptdiff release verify prod-2026-08 --stdin
+
+# What actually changed between two rollouts?
+promptdiff release diff prod-2026-07 prod-2026-08
+```
+
+`verify` always re-hashes the stored version too, so it also catches anyone editing `.promptdiff/` history behind your back. Releases are pointers: deleting one never touches the underlying prompt versions. The same API is available in Python via `ReleaseManager`.
 
 ## File Tracking and Git Hooks
 
@@ -387,6 +414,10 @@ def test_prompt_similarity():
 | `promptdiff push [remote] [-p name]` | Push prompts to a remote registry |
 | `promptdiff pull [remote] [-p name]` | Pull prompts from a remote registry |
 | `promptdiff ci-report --since <date> [--fail-below X]` | Markdown/JSON change report and CI similarity gate |
+| `promptdiff release create <rel> <name> [-v N] [--force]` | Pin a prompt version as a named, checksummed release |
+| `promptdiff release list\|show\|rm` | List, inspect, and delete releases |
+| `promptdiff release verify <rel> [--file f\|--stdin]` | Verify store and deployed content against a release (exit 1 on mismatch) |
+| `promptdiff release diff <rel-a> <rel-b>` | Diff the contents of two releases |
 
 ## License
 

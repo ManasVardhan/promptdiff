@@ -17,10 +17,13 @@ Local prompt registry to store, version, and retrieve prompt templates by name a
 ### 🌐 Remote Registry Backends
 `promptdiff remote add / rm / list` plus `push` and `pull` sync prompts against remote registries: directory remotes (any path holding a store), git remotes (cloned, synced, committed, and pushed automatically), and pull-only HTTP remotes serving JSON exports. Sync is merge-based and idempotent, matching versions by content hash and merging tags as a union, so teams can share one source of truth without ever duplicating history.
 
+### 🔐 Signed Prompt Releases
+Tag a prompt version as a named release (e.g. `prod-2026-08`) with an integrity checksum, list and diff releases, and verify that a deployed prompt matches its release before serving traffic. Shipped as the `release` command group (`create`, `list`, `show`, `verify`, `diff`, `rm`) backed by `ReleaseManager`: full SHA-256 checksums stored in `.promptdiff/releases.json`, `verify --file/--stdin` as a deploy gate that exits 1 on mismatch and also detects store tampering, `--json-output` for scripting, and releases as pure pointers that never touch version history.
+
 ## v0.2 (Planned)
 
-### 🔐 Signed Prompt Releases
-Tag a prompt version as a named release (e.g. `prod-2026-08`) with an integrity checksum, list and diff releases, and verify that a deployed prompt matches its release before serving traffic.
+### 📊 Release Audit Trail
+Record every `verify` outcome with a timestamp in an append-only audit log, plus a `release history` view, so teams can show when a deployed prompt was last proven to match its release.
 
 ---
 

@@ -1078,5 +1078,226 @@ def ci_report_cmd(since_str: str, fmt: str, output: str | None, fail_below: floa
             raise SystemExit(1)
 
 
+@cli.group()
+def release() -> None:
+    """Manage named, checksummed prompt releases."""
+
+
+@release.command("create")
+@click.argument("release_name")
+@click.argument("prompt_name")
+@click.option("-v", "--version", "version", type=int, default=None,
+              help="Prompt version to release (default: latest).")
+@click.option("-m", "--message", default="", help="Release message.")
+@click.option("--force", is_flag=True, help="Replace the release if it already exists.")
+def release_create(
+    release_name: str, prompt_name: str, version: int | None, message: str, force: bool
+) -> None:
+    """Pin a prompt version as a named release with an integrity checksum.
+
+    Example: promptdiff release create prod-2026-08 support-agent -v 3
+    """
+    from promptdiff.releases import ReleaseError, ReleaseManager
+
+    manager = ReleaseManager(_get_store())
+    try:
+        rel = manager.create(
+            release_name, prompt_name, version=version, message=message, force=force
+        )
+    except (ReleaseError, FileNotFoundError, ValueError, RuntimeError) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise SystemExit(1)
+    console.print(
+        f"[green]Released '{rel.name}': {rel.prompt} v{rel.version}[/green] "
+        f"\\[sha256:{rel.checksum[:12]}]"
+    )
+
+
+@release.command("list")
+@click.option("--json-output", is_flag=True, help="Output machine-readable JSON.")
+def release_list(json_output: bool) -> None:
+    """List all releases."""
+    from promptdiff.releases import ReleaseManager
+
+    manager = ReleaseManager(_get_store())
+    try:
+        releases = manager.list_releases()
+    except RuntimeError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise SystemExit(1)
+
+    if json_output:
+        click.echo(json.dumps([r.to_dict() for r in releases], indent=2))
+        return
+
+    if not releases:
+        console.print("[yellow]No releases yet. "
+                      "Create one with: promptdiff release create NAME PROMPT[/yellow]")
+        return
+
+    table = Table(title="Releases")
+    table.add_column("Release", style="cyan")
+    table.add_column("Prompt", style="yellow")
+    table.add_column("Version", justify="right")
+    table.add_column("Checksum")
+    table.add_column("Created")
+    table.add_column("Message")
+    for rel in releases:
+        created = rel.created[:19].replace("T", " ") if rel.created else ""
+        table.add_row(
+            rel.name, rel.prompt, f"v{rel.version}",
+            rel.checksum[:12], created, rel.message,
+        )
+    console.print(table)
+
+
+@release.command("show")
+@click.argument("release_name")
+@click.option("--raw", is_flag=True, help="Print content only, no header. Useful for piping.")
+def release_show(release_name: str, raw: bool) -> None:
+    """Show a release and the prompt content it points at."""
+    from promptdiff.releases import ReleaseError, ReleaseManager
+
+    manager = ReleaseManager(_get_store())
+    try:
+        rel = manager.get(release_name)
+        content = manager.content(release_name)
+    except (ReleaseError, FileNotFoundError, ValueError, RuntimeError) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise SystemExit(1)
+
+    if raw:
+        click.echo(content, nl=False)
+        return
+
+    console.print(f"[bold cyan]{rel.name}[/bold cyan]: {rel.prompt} v{rel.version}")
+    console.print(f"  Checksum: sha256:{rel.checksum}")
+    if rel.created:
+        console.print(f"  Created:  {rel.created}")
+    if rel.message:
+        console.print(f"  Message:  {rel.message}")
+    console.print()
+    console.print(escape(content))
+
+
+@release.command("verify")
+@click.argument("release_name")
+@click.option("-f", "--file", "file_path", type=click.Path(exists=True),
+              help="Deployed prompt file to check against the release checksum.")
+@click.option("--stdin", "use_stdin", is_flag=True,
+              help="Read the deployed prompt content from stdin instead of a file.")
+@click.option("--json-output", is_flag=True, help="Output machine-readable JSON.")
+def release_verify(
+    release_name: str, file_path: str | None, use_stdin: bool, json_output: bool
+) -> None:
+    """Verify a release's integrity. Exits 1 on any mismatch.
+
+    Always checks that the stored prompt version still matches the release
+    checksum. With --file or --stdin, also checks that the deployed content
+    matches, so CI or a deploy script can gate on it:
+
+        promptdiff release verify prod-2026-08 --file deployed_prompt.txt
+    """
+    from promptdiff.releases import ReleaseError, ReleaseManager
+
+    if file_path and use_stdin:
+        console.print("[red]Use either --file or --stdin, not both.[/red]")
+        raise SystemExit(1)
+
+    deployed: str | None = None
+    if file_path:
+        deployed = Path(file_path).read_text()
+    elif use_stdin:
+        deployed = sys.stdin.read()
+
+    manager = ReleaseManager(_get_store())
+    try:
+        result = manager.verify(release_name, deployed_content=deployed)
+    except (ReleaseError, RuntimeError) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise SystemExit(1)
+
+    if json_output:
+        click.echo(json.dumps(result.to_dict(), indent=2))
+        if not result.ok:
+            raise SystemExit(1)
+        return
+
+    rel = result.release
+    console.print(f"[bold]Verify '{rel.name}'[/bold] ({rel.prompt} v{rel.version})")
+    store_msg = "[green]OK[/green]" if result.store_ok else "[red]MISMATCH[/red]"
+    console.print(f"  Store integrity:   {store_msg}")
+    if result.deployed_ok is not None:
+        deployed_msg = "[green]OK[/green]" if result.deployed_ok else "[red]MISMATCH[/red]"
+        console.print(f"  Deployed content:  {deployed_msg}")
+    for problem in result.problems:
+        console.print(f"  [red]{problem}[/red]")
+    if not result.ok:
+        raise SystemExit(1)
+
+
+@release.command("diff")
+@click.argument("release_a")
+@click.argument("release_b")
+def release_diff(release_a: str, release_b: str) -> None:
+    """Show the diff between the contents of two releases."""
+    from promptdiff.releases import ReleaseError, ReleaseManager
+
+    manager = ReleaseManager(_get_store())
+    try:
+        rel_a = manager.get(release_a)
+        rel_b = manager.get(release_b)
+        content_a = manager.content(release_a)
+        content_b = manager.content(release_b)
+    except (ReleaseError, FileNotFoundError, ValueError, RuntimeError) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise SystemExit(1)
+
+    differ = PromptDiff()
+    result = differ.full_diff(content_a, content_b, rel_a.version, rel_b.version)
+
+    console.print(
+        f"\n[bold]Diff: {release_a} ({rel_a.prompt} v{rel_a.version}) -> "
+        f"{release_b} ({rel_b.prompt} v{rel_b.version})[/bold]\n"
+    )
+    for line in result.lines:
+        if line.tag == "equal":
+            console.print(f"  {escape((line.old_line or '').rstrip())}")
+        elif line.tag == "delete":
+            console.print(f"[red]- {escape((line.old_line or '').rstrip())}[/red]")
+        elif line.tag == "insert":
+            console.print(f"[green]+ {escape((line.new_line or '').rstrip())}[/green]")
+    console.print()
+    console.print(f"[bold]Text similarity:[/bold]  {result.similarity_ratio:.1%}")
+    console.print(
+        f"[bold]Changes:[/bold] [green]+{result.stats['additions']}[/green] "
+        f"[red]-{result.stats['deletions']}[/red]"
+    )
+
+
+@release.command("rm")
+@click.argument("release_name")
+@click.option("-y", "--yes", is_flag=True, help="Skip confirmation prompt.")
+def release_rm(release_name: str, yes: bool) -> None:
+    """Delete a release. The underlying prompt version is untouched."""
+    from promptdiff.releases import ReleaseError, ReleaseManager
+
+    manager = ReleaseManager(_get_store())
+    try:
+        rel = manager.get(release_name)
+    except (ReleaseError, RuntimeError) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise SystemExit(1)
+
+    if not yes and not click.confirm(
+        f"Delete release '{release_name}' ({rel.prompt} v{rel.version})?"
+    ):
+        console.print("[yellow]Aborted.[/yellow]")
+        return
+
+    manager.delete(release_name)
+    console.print(f"[green]Deleted release '{release_name}'.[/green]")
+
+
 if __name__ == "__main__":
     cli()
