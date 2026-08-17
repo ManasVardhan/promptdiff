@@ -14,6 +14,7 @@ from unittest.mock import patch
 import pytest
 from click.testing import CliRunner
 
+from promptdiff import __version__
 from promptdiff.cli import cli
 from promptdiff.store import PromptStore
 
@@ -57,7 +58,7 @@ class TestMainModule:
             timeout=10,
         )
         assert result.returncode == 0
-        assert "0.1.1" in result.stdout
+        assert __version__ in result.stdout
 
 
 class TestExportCommand:

@@ -20,10 +20,13 @@ Local prompt registry to store, version, and retrieve prompt templates by name a
 ### 🔐 Signed Prompt Releases
 Tag a prompt version as a named release (e.g. `prod-2026-08`) with an integrity checksum, list and diff releases, and verify that a deployed prompt matches its release before serving traffic. Shipped as the `release` command group (`create`, `list`, `show`, `verify`, `diff`, `rm`) backed by `ReleaseManager`: full SHA-256 checksums stored in `.promptdiff/releases.json`, `verify --file/--stdin` as a deploy gate that exits 1 on mismatch and also detects store tampering, `--json-output` for scripting, and releases as pure pointers that never touch version history.
 
-## v0.2 (Planned)
-
 ### 📊 Release Audit Trail
-Record every `verify` outcome with a timestamp in an append-only audit log, plus a `release history` view, so teams can show when a deployed prompt was last proven to match its release.
+Every `verify` outcome is recorded with a timestamp in an append-only audit log (`.promptdiff/release_audit.jsonl`), and `promptdiff release history` shows the trail with per-release filtering, `--limit`, and `--json-output`. Teams can show when a deployed prompt was last proven to match its release. `ReleaseManager.history()` exposes the same data in Python, and `verify(..., record=False)` opts out of logging.
+
+## v0.3 (Planned)
+
+### ⏱️ Prompt Version Pinning in CI
+A `promptdiff pin check` command that reads a lockfile of prompt name to checksum pairs and fails CI when any tracked prompt drifts from its pinned version, closing the loop between releases and pull requests.
 
 ---
 

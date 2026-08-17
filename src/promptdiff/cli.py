@@ -1236,6 +1236,63 @@ def release_verify(
         raise SystemExit(1)
 
 
+@release.command("history")
+@click.argument("release_name", required=False)
+@click.option("-n", "--limit", type=int, default=None,
+              help="Only show the most recent N entries.")
+@click.option("--json-output", is_flag=True, help="Output machine-readable JSON.")
+def release_history(release_name: str | None, limit: int | None, json_output: bool) -> None:
+    """Show the audit trail of recorded verify outcomes.
+
+    Every `promptdiff release verify` run is appended to an audit log.
+    Pass a release name to filter, and --limit to show only recent entries:
+
+        promptdiff release history prod-2026-08 --limit 10
+    """
+    from promptdiff.releases import ReleaseManager
+
+    manager = ReleaseManager(_get_store())
+    try:
+        entries = manager.history(name=release_name, limit=limit)
+    except RuntimeError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise SystemExit(1)
+
+    if json_output:
+        click.echo(json.dumps([e.to_dict() for e in entries], indent=2))
+        return
+
+    if not entries:
+        target = f" for '{release_name}'" if release_name else ""
+        console.print(f"[yellow]No verify outcomes recorded{target} yet. "
+                      "Run: promptdiff release verify NAME[/yellow]")
+        return
+
+    table = Table(title="Release verify history")
+    table.add_column("Time", style="cyan")
+    table.add_column("Release", style="bold")
+    table.add_column("Prompt")
+    table.add_column("Version", justify="right")
+    table.add_column("Store")
+    table.add_column("Deployed")
+    table.add_column("Result")
+    for entry in entries:
+        deployed = "-" if entry.deployed_ok is None else ("OK" if entry.deployed_ok else "MISMATCH")
+        table.add_row(
+            entry.timestamp[:19].replace("T", " "),
+            entry.release,
+            entry.prompt,
+            f"v{entry.version}",
+            "OK" if entry.store_ok else "MISMATCH",
+            deployed,
+            "[green]PASS[/green]" if entry.ok else "[red]FAIL[/red]",
+        )
+    console.print(table)
+    for entry in entries:
+        for problem in entry.problems:
+            console.print(f"  [red]{entry.timestamp[:19]} {entry.release}: {problem}[/red]")
+
+
 @release.command("diff")
 @click.argument("release_a")
 @click.argument("release_b")

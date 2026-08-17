@@ -27,6 +27,7 @@ You iterate on prompts dozens of times. You tweak a system message, change a few
 - 📂 **Shared Registry** - Point every project at one store with `--store` or `PROMPTDIFF_STORE`
 - 🌐 **Remote Registries** - Push and pull prompts between machines via directory, git, or HTTP remotes
 - 🔐 **Releases** - Pin prompt versions under stable names with SHA-256 checksums and verify deployments against them
+- 📊 **Audit trail** - Every release verify outcome is recorded in an append-only log with `release history` to review it
 - 📊 **Evaluation** - Run prompt versions against test cases and score results
 - 📋 **Changelog** - Auto-generate version history with diff stats
 - 💻 **CLI First** - Beautiful terminal output powered by Rich
@@ -218,6 +219,23 @@ promptdiff release diff prod-2026-07 prod-2026-08
 ```
 
 `verify` always re-hashes the stored version too, so it also catches anyone editing `.promptdiff/` history behind your back. Releases are pointers: deleting one never touches the underlying prompt versions. The same API is available in Python via `ReleaseManager`.
+
+### Release Audit Trail
+
+Every `release verify` outcome is appended to an audit log (`.promptdiff/release_audit.jsonl`), so you can show when a deployed prompt was last proven to match its release:
+
+```bash
+# Show every recorded verify outcome
+promptdiff release history
+
+# Filter by release, keep only the most recent entries
+promptdiff release history prod-2026-08 --limit 10
+
+# Machine-readable, for dashboards or compliance exports
+promptdiff release history --json-output
+```
+
+Each entry records the timestamp, release, prompt, version, store integrity, deployed content check, and any problems. The log is append-only JSONL; nothing ever rewrites past entries. In Python, `ReleaseManager.history()` returns the same data as `AuditEntry` objects, and `verify(..., record=False)` opts a check out of the log.
 
 ## File Tracking and Git Hooks
 

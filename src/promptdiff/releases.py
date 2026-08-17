@@ -18,6 +18,7 @@ from typing import Any
 from promptdiff.store import PromptStore
 
 RELEASES_FILE = "releases.json"
+AUDIT_FILE = "release_audit.jsonl"
 
 
 class ReleaseError(Exception):
@@ -83,6 +84,45 @@ class VerifyResult:
             "ok": self.ok,
             "problems": self.problems,
         }
+
+
+@dataclass
+class AuditEntry:
+    """One recorded verify outcome in the append-only release audit log."""
+
+    timestamp: str
+    release: str
+    prompt: str
+    version: int
+    store_ok: bool
+    deployed_ok: bool | None
+    ok: bool
+    problems: list[str] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "timestamp": self.timestamp,
+            "release": self.release,
+            "prompt": self.prompt,
+            "version": self.version,
+            "store_ok": self.store_ok,
+            "deployed_ok": self.deployed_ok,
+            "ok": self.ok,
+            "problems": self.problems,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> AuditEntry:
+        return cls(
+            timestamp=data["timestamp"],
+            release=data["release"],
+            prompt=data["prompt"],
+            version=data["version"],
+            store_ok=data["store_ok"],
+            deployed_ok=data.get("deployed_ok"),
+            ok=data["ok"],
+            problems=data.get("problems", []),
+        )
 
 
 class ReleaseManager:
@@ -174,13 +214,60 @@ class ReleaseManager:
         release = self.get(name)
         return self.store.get_version(release.prompt, release.version).content
 
-    def verify(self, name: str, deployed_content: str | None = None) -> VerifyResult:
+    @property
+    def _audit_path(self):  # noqa: ANN202
+        return self.store.store_path / AUDIT_FILE
+
+    def _record_audit(self, result: VerifyResult) -> AuditEntry:
+        entry = AuditEntry(
+            timestamp=datetime.now(timezone.utc).isoformat(),
+            release=result.release.name,
+            prompt=result.release.prompt,
+            version=result.release.version,
+            store_ok=result.store_ok,
+            deployed_ok=result.deployed_ok,
+            ok=result.ok,
+            problems=list(result.problems),
+        )
+        with self._audit_path.open("a") as fh:
+            fh.write(json.dumps(entry.to_dict()) + "\n")
+        return entry
+
+    def history(self, name: str | None = None, limit: int | None = None) -> list[AuditEntry]:
+        """Return recorded verify outcomes, newest last.
+
+        Args:
+            name: Only return entries for this release name (all if None).
+            limit: Only return the most recent *limit* entries.
+        """
+        self.store._ensure_init()
+        if not self._audit_path.exists():
+            return []
+        entries: list[AuditEntry] = []
+        for line in self._audit_path.read_text().splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                entries.append(AuditEntry.from_dict(json.loads(line)))
+            except (json.JSONDecodeError, KeyError):
+                continue
+        if name is not None:
+            entries = [e for e in entries if e.release == name]
+        if limit is not None and limit > 0:
+            entries = entries[-limit:]
+        return entries
+
+    def verify(
+        self, name: str, deployed_content: str | None = None, record: bool = True
+    ) -> VerifyResult:
         """Verify a release's integrity.
 
         Always checks that the version content in the store still matches the
         release checksum. If *deployed_content* is given (for example the
         prompt text a service is about to use), it is checked against the
-        release checksum too.
+        release checksum too. Every outcome is appended to the release audit
+        log unless *record* is False.
         """
         release = self.get(name)
         result = VerifyResult(release=release, store_ok=True)
@@ -212,4 +299,6 @@ class ReleaseManager:
                     f"(expected {release.checksum[:12]}, got {deployed[:12]})."
                 )
 
+        if record:
+            self._record_audit(result)
         return result

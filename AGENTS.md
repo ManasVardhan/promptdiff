@@ -44,7 +44,7 @@
 promptdiff/
   .github/workflows/ci.yml        -- CI: lint + test + coverage on Python 3.10-3.12
   src/promptdiff/
-    __init__.py                    -- Public API re-exports, __version__ = "0.1.1"
+    __init__.py                    -- Public API re-exports, __version__ = "0.2.0"
     __main__.py                    -- python -m promptdiff entry
     store.py                       -- PromptStore: file-based version storage, VersionInfo
     diff.py                        -- PromptDiff: text diffs, Jaccard similarity, embedding similarity
@@ -213,7 +213,7 @@ pytest --cov=promptdiff -v
 
 ## Current Status
 
-- **Version**: 0.1.1
+- **Version**: 0.2.0
 - **Published on PyPI**: yes (`pip install llm-promptdiff`)
 - **What works**: Full version control (init, add, get, list, delete), text diffs with similarity scoring, Jaccard semantic similarity, prompt evaluation with pluggable runners/scorers, changelog generation, export/import (JSON/JSONL), search, tag management
 - **Known limitations**: Embedding similarity requires OpenAI API key and extra install. Eval CLI command is demo-only (self-test mode). No git hooks integration yet.
