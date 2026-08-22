@@ -23,10 +23,13 @@ Tag a prompt version as a named release (e.g. `prod-2026-08`) with an integrity 
 ### 📊 Release Audit Trail
 Every `verify` outcome is recorded with a timestamp in an append-only audit log (`.promptdiff/release_audit.jsonl`), and `promptdiff release history` shows the trail with per-release filtering, `--limit`, and `--json-output`. Teams can show when a deployed prompt was last proven to match its release. `ReleaseManager.history()` exposes the same data in Python, and `verify(..., record=False)` opts out of logging.
 
-## v0.3 (Planned)
-
 ### ⏱️ Prompt Version Pinning in CI
-A `promptdiff pin check` command that reads a lockfile of prompt name to checksum pairs and fails CI when any tracked prompt drifts from its pinned version, closing the loop between releases and pull requests.
+`promptdiff pin add` locks a prompt at a version with its full SHA-256 checksum in a committable `promptdiff.lock`, and `promptdiff pin check` fails CI (exit 1) when any pinned prompt drifted to a newer version, was edited in place, or disappeared, closing the loop between releases and pull requests. `pin list`, `pin rm`, and `pin update` manage the lockfile, `--json-output` supports scripting, `--lockfile` selects an alternate path, and `PinManager` exposes the same operations in Python.
+
+## v0.4 (Planned)
+
+### 📦 Prompt Bundles
+A `promptdiff bundle` command that packs a set of pinned prompts into a single signed archive for deployment, and unpacks or verifies it on the serving side, so services can ship exactly the reviewed prompt set as one artifact.
 
 ---
 

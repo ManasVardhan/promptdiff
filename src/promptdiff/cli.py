@@ -1356,5 +1356,161 @@ def release_rm(release_name: str, yes: bool) -> None:
     console.print(f"[green]Deleted release '{release_name}'.[/green]")
 
 
+@cli.group()
+def pin() -> None:
+    """Pin prompt versions in a lockfile and check them in CI."""
+
+
+@pin.command("add")
+@click.argument("prompt_name")
+@click.option("-v", "--version", "version", type=int, default=None,
+              help="Prompt version to pin (default: latest).")
+@click.option("--lockfile", type=click.Path(dir_okay=False), default=None,
+              help="Lockfile path (default: promptdiff.lock in the store root).")
+def pin_add(prompt_name: str, version: int | None, lockfile: str | None) -> None:
+    """Pin a prompt version with its checksum in promptdiff.lock.
+
+    Example: promptdiff pin add support-agent -v 3
+    """
+    from promptdiff.pins import PinManager
+
+    manager = PinManager(_get_store(), lock_path=lockfile)
+    try:
+        pinned = manager.add(prompt_name, version=version)
+    except (FileNotFoundError, ValueError, RuntimeError) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise SystemExit(1)
+    console.print(
+        f"[green]Pinned {pinned.prompt} v{pinned.version}[/green] "
+        f"\\[sha256:{pinned.checksum[:12]}] in {manager.lock_path.name}"
+    )
+
+
+@pin.command("rm")
+@click.argument("prompt_name")
+@click.option("--lockfile", type=click.Path(dir_okay=False), default=None,
+              help="Lockfile path (default: promptdiff.lock in the store root).")
+def pin_rm(prompt_name: str, lockfile: str | None) -> None:
+    """Remove a prompt's pin from the lockfile."""
+    from promptdiff.pins import PinError, PinManager
+
+    manager = PinManager(_get_store(), lock_path=lockfile)
+    try:
+        manager.remove(prompt_name)
+    except PinError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise SystemExit(1)
+    console.print(f"[green]Removed pin for '{prompt_name}'.[/green]")
+
+
+@pin.command("list")
+@click.option("--lockfile", type=click.Path(dir_okay=False), default=None,
+              help="Lockfile path (default: promptdiff.lock in the store root).")
+@click.option("--json-output", is_flag=True, help="Output machine-readable JSON.")
+def pin_list(lockfile: str | None, json_output: bool) -> None:
+    """List all pinned prompts."""
+    from promptdiff.pins import PinError, PinManager
+
+    manager = PinManager(_get_store(), lock_path=lockfile)
+    try:
+        pins = manager.list_pins()
+    except PinError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise SystemExit(1)
+
+    if json_output:
+        click.echo(json.dumps([p.to_dict() for p in pins], indent=2))
+        return
+
+    if not pins:
+        console.print("[yellow]No pins yet. "
+                      "Create one with: promptdiff pin add PROMPT[/yellow]")
+        return
+
+    table = Table(title=f"Pins ({manager.lock_path})")
+    table.add_column("Prompt", style="cyan")
+    table.add_column("Version", justify="right")
+    table.add_column("Checksum")
+    for pinned in pins:
+        table.add_row(pinned.prompt, f"v{pinned.version}", pinned.checksum[:12])
+    console.print(table)
+
+
+@pin.command("check")
+@click.argument("prompt_name", required=False)
+@click.option("--lockfile", type=click.Path(dir_okay=False), default=None,
+              help="Lockfile path (default: promptdiff.lock in the store root).")
+@click.option("--json-output", is_flag=True, help="Output machine-readable JSON.")
+def pin_check(prompt_name: str | None, lockfile: str | None, json_output: bool) -> None:
+    """Check pinned prompts against the store. Exits 1 on any drift.
+
+    Fails when a pinned prompt gained new versions (drifted), its pinned
+    content was edited in place (modified), or it disappeared (missing),
+    so CI catches every prompt change that was not re-pinned:
+
+        promptdiff pin check
+    """
+    from promptdiff.pins import PinError, PinManager
+
+    manager = PinManager(_get_store(), lock_path=lockfile)
+    try:
+        results = manager.check(prompt_name)
+    except (PinError, RuntimeError) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise SystemExit(1)
+
+    failed = [r for r in results if not r.ok]
+
+    if json_output:
+        click.echo(json.dumps([r.to_dict() for r in results], indent=2))
+        if failed:
+            raise SystemExit(1)
+        return
+
+    for result in results:
+        pinned = result.pin
+        if result.ok:
+            console.print(
+                f"  [green]OK[/green]       {pinned.prompt} v{pinned.version} "
+                f"\\[sha256:{pinned.checksum[:12]}]"
+            )
+        else:
+            console.print(
+                f"  [red]{result.status.upper()}[/red]  "
+                f"{pinned.prompt} (pinned v{pinned.version})"
+            )
+            for problem in result.problems:
+                console.print(f"           [red]{problem}[/red]")
+
+    if failed:
+        console.print(
+            f"\n[red]{len(failed)} of {len(results)} pins failed. "
+            f"Re-pin intentional changes with: promptdiff pin update[/red]"
+        )
+        raise SystemExit(1)
+    console.print(f"\n[green]All {len(results)} pins match.[/green]")
+
+
+@pin.command("update")
+@click.argument("prompt_name", required=False)
+@click.option("--lockfile", type=click.Path(dir_okay=False), default=None,
+              help="Lockfile path (default: promptdiff.lock in the store root).")
+def pin_update(prompt_name: str | None, lockfile: str | None) -> None:
+    """Re-pin prompts at their latest versions and rewrite the lockfile."""
+    from promptdiff.pins import PinError, PinManager
+
+    manager = PinManager(_get_store(), lock_path=lockfile)
+    try:
+        updated = manager.update(prompt_name)
+    except (PinError, FileNotFoundError, ValueError, RuntimeError) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise SystemExit(1)
+    for pinned in updated:
+        console.print(
+            f"[green]Pinned {pinned.prompt} v{pinned.version}[/green] "
+            f"\\[sha256:{pinned.checksum[:12]}]"
+        )
+
+
 if __name__ == "__main__":
     cli()

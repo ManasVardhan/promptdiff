@@ -28,6 +28,7 @@ You iterate on prompts dozens of times. You tweak a system message, change a few
 - 🌐 **Remote Registries** - Push and pull prompts between machines via directory, git, or HTTP remotes
 - 🔐 **Releases** - Pin prompt versions under stable names with SHA-256 checksums and verify deployments against them
 - 📊 **Audit trail** - Every release verify outcome is recorded in an append-only log with `release history` to review it
+- ⏱️ **Version Pinning** - Lock prompts to versions in a committable `promptdiff.lock` and fail CI on any drift with `pin check`
 - 📊 **Evaluation** - Run prompt versions against test cases and score results
 - 📋 **Changelog** - Auto-generate version history with diff stats
 - 💻 **CLI First** - Beautiful terminal output powered by Rich
@@ -237,6 +238,37 @@ promptdiff release history --json-output
 
 Each entry records the timestamp, release, prompt, version, store integrity, deployed content check, and any problems. The log is append-only JSONL; nothing ever rewrites past entries. In Python, `ReleaseManager.history()` returns the same data as `AuditEntry` objects, and `verify(..., record=False)` opts a check out of the log.
 
+## Version Pinning for CI
+
+Pin prompts to exact versions in a lockfile that lives next to `.promptdiff/` and gets committed to git, then let CI fail whenever a prompt changes without the lockfile being updated in the same pull request:
+
+```bash
+# Lock prompts at their current versions (writes promptdiff.lock)
+promptdiff pin add support-agent
+promptdiff pin add summarizer -v 2
+
+# In CI: exit 1 if any pinned prompt drifted, was edited in place, or vanished
+promptdiff pin check
+
+# A prompt changed on purpose? Re-pin it and commit the new lockfile
+promptdiff pin update support-agent
+
+# Inspect or trim the lockfile
+promptdiff pin list
+promptdiff pin rm summarizer
+```
+
+`pin check` distinguishes three failure modes: `drifted` (new versions were added after the pin), `modified` (the pinned version's stored content no longer matches its checksum), and `missing` (the prompt or version is gone). `--json-output` emits machine-readable results and `--lockfile` selects an alternate path. The same operations are available in Python via `PinManager`:
+
+```python
+from promptdiff import PromptStore, PinManager
+
+manager = PinManager(PromptStore("."))
+manager.add("support-agent")
+for result in manager.check():
+    print(result.pin.prompt, result.status, result.problems)
+```
+
 ## File Tracking and Git Hooks
 
 Prompts usually live in source files. Link them once and promptdiff snapshots them automatically whenever they change:
@@ -436,6 +468,9 @@ def test_prompt_similarity():
 | `promptdiff release list\|show\|rm` | List, inspect, and delete releases |
 | `promptdiff release verify <rel> [--file f\|--stdin]` | Verify store and deployed content against a release (exit 1 on mismatch) |
 | `promptdiff release diff <rel-a> <rel-b>` | Diff the contents of two releases |
+| `promptdiff pin add <name> [-v N]` | Lock a prompt version with its checksum in promptdiff.lock |
+| `promptdiff pin check [name]` | Verify pins against the store (exit 1 on drift, tamper, or missing) |
+| `promptdiff pin list\|rm\|update` | List, remove, and refresh lockfile pins |
 
 ## License
 
