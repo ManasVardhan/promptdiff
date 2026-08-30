@@ -26,10 +26,13 @@ Every `verify` outcome is recorded with a timestamp in an append-only audit log 
 ### ⏱️ Prompt Version Pinning in CI
 `promptdiff pin add` locks a prompt at a version with its full SHA-256 checksum in a committable `promptdiff.lock`, and `promptdiff pin check` fails CI (exit 1) when any pinned prompt drifted to a newer version, was edited in place, or disappeared, closing the loop between releases and pull requests. `pin list`, `pin rm`, and `pin update` manage the lockfile, `--json-output` supports scripting, `--lockfile` selects an alternate path, and `PinManager` exposes the same operations in Python.
 
-## v0.4 (Planned)
-
 ### 📦 Prompt Bundles
-A `promptdiff bundle` command that packs a set of pinned prompts into a single signed archive for deployment, and unpacks or verifies it on the serving side, so services can ship exactly the reviewed prompt set as one artifact.
+`promptdiff bundle create` packs the pinned prompt set from `promptdiff.lock` (or explicitly named prompts) into a single tar.gz artifact with per-prompt SHA-256 checksums and a bundle-level checksum in its manifest. `bundle show` inspects a bundle, `bundle verify` proves its contents match the manifest (exit 1 on any tampering, missing, or extra file, usable as a deploy gate), and `bundle unpack` verifies then writes the prompts to a directory, refusing to overwrite without `--force`. `BundleManager` exposes the same operations in Python, so services ship exactly the reviewed prompt set as one artifact.
+
+## v0.5 (Planned)
+
+### 🌍 Bundle Serving Helpers
+A tiny runtime helper that loads a verified bundle into memory (`load_bundle`) with checksum verification at startup and hot-reload on file change, so applications can consume bundles without touching the CLI.
 
 ---
 

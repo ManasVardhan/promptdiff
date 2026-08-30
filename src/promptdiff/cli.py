@@ -1512,5 +1512,137 @@ def pin_update(prompt_name: str | None, lockfile: str | None) -> None:
         )
 
 
+@cli.group()
+def bundle() -> None:
+    """Pack pinned prompts into a single verifiable deployment artifact."""
+
+
+@bundle.command("create")
+@click.argument("output", type=click.Path(dir_okay=False))
+@click.option("-p", "--prompt", "prompt_names", multiple=True,
+              help="Bundle this prompt at its latest version instead of using "
+                   "the lockfile. Repeatable.")
+@click.option("--lockfile", type=click.Path(dir_okay=False), default=None,
+              help="Lockfile path (default: promptdiff.lock in the store root).")
+@click.option("-m", "--message", default="", help="Message stored in the bundle manifest.")
+def bundle_create(
+    output: str, prompt_names: tuple[str, ...], lockfile: str | None, message: str
+) -> None:
+    """Create a bundle archive from the pinned prompt set.
+
+    By default the bundle contains exactly the versions pinned in
+    promptdiff.lock, so what ships is what CI reviewed:
+
+        promptdiff bundle create prompts.bundle.tar.gz
+    """
+    from promptdiff.bundles import BundleError, BundleManager
+
+    manager = BundleManager(_get_store())
+    try:
+        manifest = manager.create(
+            output,
+            prompts=list(prompt_names) or None,
+            lockfile=lockfile,
+            message=message,
+        )
+    except (BundleError, FileNotFoundError, ValueError, RuntimeError) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise SystemExit(1)
+    console.print(
+        f"[green]Bundled {len(manifest.entries)} prompt(s)[/green] into {output} "
+        f"\\[sha256:{manifest.checksum[:12]}]"
+    )
+    for entry in manifest.entries:
+        console.print(f"  {entry.prompt} v{entry.version} \\[sha256:{entry.checksum[:12]}]")
+
+
+@bundle.command("show")
+@click.argument("bundle_path", type=click.Path(exists=True, dir_okay=False))
+@click.option("--json-output", is_flag=True, help="Output machine-readable JSON.")
+def bundle_show(bundle_path: str, json_output: bool) -> None:
+    """Show a bundle's manifest: which prompts and versions it contains."""
+    from promptdiff.bundles import BundleError, BundleManager
+
+    try:
+        manifest = BundleManager().show(bundle_path)
+    except BundleError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise SystemExit(1)
+
+    if json_output:
+        click.echo(json.dumps(manifest.to_dict(), indent=2))
+        return
+
+    console.print(f"\n[bold]Bundle:[/bold] {bundle_path}")
+    if manifest.message:
+        console.print(f"[bold]Message:[/bold] {manifest.message}")
+    console.print(f"[bold]Created:[/bold] {manifest.created[:19].replace('T', ' ')}")
+    console.print(f"[bold]Checksum:[/bold] sha256:{manifest.checksum[:12]}\n")
+    table = Table()
+    table.add_column("Prompt", style="cyan")
+    table.add_column("Version", justify="right")
+    table.add_column("Checksum")
+    for entry in manifest.entries:
+        table.add_row(entry.prompt, f"v{entry.version}", entry.checksum[:12])
+    console.print(table)
+
+
+@bundle.command("verify")
+@click.argument("bundle_path", type=click.Path(exists=True, dir_okay=False))
+@click.option("--json-output", is_flag=True, help="Output machine-readable JSON.")
+def bundle_verify(bundle_path: str, json_output: bool) -> None:
+    """Verify a bundle's contents against its checksums. Exits 1 on mismatch.
+
+    Use this as a deploy gate before serving prompts from a bundle:
+
+        promptdiff bundle verify prompts.bundle.tar.gz
+    """
+    from promptdiff.bundles import BundleError, BundleManager
+
+    try:
+        result = BundleManager().verify(bundle_path)
+    except BundleError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise SystemExit(1)
+
+    if json_output:
+        click.echo(json.dumps(result.to_dict(), indent=2))
+        if not result.ok:
+            raise SystemExit(1)
+        return
+
+    for entry in result.manifest.entries:
+        console.print(
+            f"  {entry.prompt} v{entry.version} \\[sha256:{entry.checksum[:12]}]"
+        )
+    if result.ok:
+        console.print(
+            f"\n[green]Bundle OK: {len(result.manifest.entries)} prompt(s) verified.[/green]"
+        )
+        return
+    for problem in result.problems:
+        console.print(f"[red]{problem}[/red]")
+    console.print("\n[red]Bundle verification FAILED.[/red]")
+    raise SystemExit(1)
+
+
+@bundle.command("unpack")
+@click.argument("bundle_path", type=click.Path(exists=True, dir_okay=False))
+@click.argument("dest", type=click.Path(file_okay=False))
+@click.option("--force", is_flag=True, help="Overwrite existing files in DEST.")
+def bundle_unpack(bundle_path: str, dest: str, force: bool) -> None:
+    """Verify a bundle and unpack its prompts into DEST as <name>.txt files."""
+    from promptdiff.bundles import BundleError, BundleManager
+
+    try:
+        written = BundleManager().unpack(bundle_path, dest, force=force)
+    except BundleError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise SystemExit(1)
+    for path in written:
+        console.print(f"  [green]wrote[/green] {path}")
+    console.print(f"\n[green]Unpacked {len(written)} prompt(s) into {dest}.[/green]")
+
+
 if __name__ == "__main__":
     cli()

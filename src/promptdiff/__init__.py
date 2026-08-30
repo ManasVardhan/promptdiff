@@ -1,6 +1,6 @@
 """promptdiff - Git-style diff and version control for LLM prompts."""
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"
 
 from promptdiff.store import PromptStore
 from promptdiff.diff import PromptDiff
@@ -18,6 +18,14 @@ from promptdiff.releases import (
     release_checksum,
 )
 from promptdiff.pins import Pin, PinCheckResult, PinError, PinManager
+from promptdiff.bundles import (
+    BundleEntry,
+    BundleError,
+    BundleManager,
+    BundleManifest,
+    BundleVerifyResult,
+    bundle_checksum,
+)
 from promptdiff.semantic import SemanticComparison, compare_semantic, local_similarity
 
 # Backward-compatible alias
@@ -43,6 +51,12 @@ __all__ = [
     "PinCheckResult",
     "PinError",
     "PinManager",
+    "BundleEntry",
+    "BundleError",
+    "BundleManager",
+    "BundleManifest",
+    "BundleVerifyResult",
+    "bundle_checksum",
     "collect_changes",
     "render_markdown",
     "SemanticComparison",

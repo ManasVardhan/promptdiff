@@ -29,6 +29,7 @@ You iterate on prompts dozens of times. You tweak a system message, change a few
 - 🔐 **Releases** - Pin prompt versions under stable names with SHA-256 checksums and verify deployments against them
 - 📊 **Audit trail** - Every release verify outcome is recorded in an append-only log with `release history` to review it
 - ⏱️ **Version Pinning** - Lock prompts to versions in a committable `promptdiff.lock` and fail CI on any drift with `pin check`
+- 📦 **Prompt Bundles** - Pack the pinned prompt set into one checksummed tar.gz artifact, then verify and unpack it at deploy time
 - 📊 **Evaluation** - Run prompt versions against test cases and score results
 - 📋 **Changelog** - Auto-generate version history with diff stats
 - 💻 **CLI First** - Beautiful terminal output powered by Rich
@@ -269,6 +270,35 @@ for result in manager.check():
     print(result.pin.prompt, result.status, result.problems)
 ```
 
+## Prompt Bundles for Deployment
+
+Ship the whole reviewed prompt set as one verifiable artifact. `bundle create` packs the exact versions pinned in `promptdiff.lock` into a tar.gz with per-prompt SHA-256 checksums and a bundle-level checksum in its manifest:
+
+```bash
+# Pack the pinned prompt set into one artifact
+promptdiff bundle create prompts.bundle.tar.gz -m "prod 2026-08"
+
+# Inspect what a bundle contains
+promptdiff bundle show prompts.bundle.tar.gz
+
+# On the serving side: exit 1 if anything was tampered with, missing, or added
+promptdiff bundle verify prompts.bundle.tar.gz
+
+# Verify and write the prompts to a directory (refuses to overwrite without --force)
+promptdiff bundle unpack prompts.bundle.tar.gz ./deployed-prompts
+```
+
+Bundling from the lockfile re-checks every pin against the store first, so a tampered store fails at create time, and `unpack` refuses to touch disk if verification fails. Use `-p/--prompt` to bundle specific prompts at their latest versions instead of the lockfile. `--json-output` on `show` and `verify` supports scripting, and `BundleManager` exposes the same operations in Python:
+
+```python
+from promptdiff import PromptStore, BundleManager
+
+manager = BundleManager(PromptStore("."))
+manager.create("prompts.bundle.tar.gz")
+result = BundleManager().verify("prompts.bundle.tar.gz")
+print(result.ok, result.problems)
+```
+
 ## File Tracking and Git Hooks
 
 Prompts usually live in source files. Link them once and promptdiff snapshots them automatically whenever they change:
@@ -471,6 +501,9 @@ def test_prompt_similarity():
 | `promptdiff pin add <name> [-v N]` | Lock a prompt version with its checksum in promptdiff.lock |
 | `promptdiff pin check [name]` | Verify pins against the store (exit 1 on drift, tamper, or missing) |
 | `promptdiff pin list\|rm\|update` | List, remove, and refresh lockfile pins |
+| `promptdiff bundle create <file>` | Pack the pinned prompt set into one verifiable tar.gz artifact |
+| `promptdiff bundle verify <file>` | Verify a bundle against its checksums (exit 1 on tampering) |
+| `promptdiff bundle show\|unpack` | Inspect a bundle or verify and extract it to a directory |
 
 ## License
 
