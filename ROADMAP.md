@@ -29,10 +29,13 @@ Every `verify` outcome is recorded with a timestamp in an append-only audit log 
 ### 📦 Prompt Bundles
 `promptdiff bundle create` packs the pinned prompt set from `promptdiff.lock` (or explicitly named prompts) into a single tar.gz artifact with per-prompt SHA-256 checksums and a bundle-level checksum in its manifest. `bundle show` inspects a bundle, `bundle verify` proves its contents match the manifest (exit 1 on any tampering, missing, or extra file, usable as a deploy gate), and `bundle unpack` verifies then writes the prompts to a directory, refusing to overwrite without `--force`. `BundleManager` exposes the same operations in Python, so services ship exactly the reviewed prompt set as one artifact.
 
-## v0.5 (Planned)
-
 ### 🌍 Bundle Serving Helpers
-A tiny runtime helper that loads a verified bundle into memory (`load_bundle`) with checksum verification at startup and hot-reload on file change, so applications can consume bundles without touching the CLI.
+Runtime helpers that consume bundles without touching the CLI: `load_bundle` reads an archive once, verifies every checksum, and returns an immutable `LoadedBundle` for lookups, while `BundleServer` keeps a bundle loaded for the process lifetime with throttled hot reload on file change (`check_interval`). A reload that fails verification never replaces the last good bundle: the previous prompts keep serving, the failure lands in `last_error`, and `on_error` / `on_reload` hooks observe the lifecycle. Thread-safe, with `reload()` and `reload_if_changed()` for explicit control.
+
+## v0.6 (Planned)
+
+### 🩺 Prompt Doctor
+`promptdiff doctor` runs an integrity sweep across the whole store: orphaned tracked files, pins pointing at missing versions, releases whose checksums no longer match, stale remotes, and lockfile drift, with `--fix` for safe repairs and exit 1 for CI.
 
 ---
 

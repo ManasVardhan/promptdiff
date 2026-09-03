@@ -30,6 +30,7 @@ You iterate on prompts dozens of times. You tweak a system message, change a few
 - 📊 **Audit trail** - Every release verify outcome is recorded in an append-only log with `release history` to review it
 - ⏱️ **Version Pinning** - Lock prompts to versions in a committable `promptdiff.lock` and fail CI on any drift with `pin check`
 - 📦 **Prompt Bundles** - Pack the pinned prompt set into one checksummed tar.gz artifact, then verify and unpack it at deploy time
+- 🌍 **Bundle Serving** - Load verified bundles in memory with `load_bundle`, or serve them with hot reload via `BundleServer`
 - 📊 **Evaluation** - Run prompt versions against test cases and score results
 - 📋 **Changelog** - Auto-generate version history with diff stats
 - 💻 **CLI First** - Beautiful terminal output powered by Rich
@@ -298,6 +299,24 @@ manager.create("prompts.bundle.tar.gz")
 result = BundleManager().verify("prompts.bundle.tar.gz")
 print(result.ok, result.problems)
 ```
+
+### Serving Bundles at Runtime
+
+Applications consume bundles without touching the CLI. `load_bundle` reads the archive once, verifies every checksum, and returns an immutable in-memory bundle. `BundleServer` keeps it loaded for the process lifetime and hot-reloads when the file changes on disk:
+
+```python
+from promptdiff import BundleServer, load_bundle
+
+# One-shot: verify at startup, fail fast on a bad artifact
+bundle = load_bundle("prompts.bundle.tar.gz")
+system_prompt = bundle.get("support-agent")
+
+# Long-running service: recheck the file at most every 5 seconds
+server = BundleServer("prompts.bundle.tar.gz", check_interval=5.0)
+prompt = server.get("support-agent")  # always the current verified content
+```
+
+A hot reload that fails verification never replaces the last good bundle: the server keeps serving the previous prompts, records the failure in `server.last_error`, and calls your `on_error` hook, so a corrupted deploy cannot take working prompts down. `on_reload` fires with the fresh bundle after every successful swap, and `server.reload()` / `server.reload_if_changed()` give you explicit control when you want it.
 
 ## File Tracking and Git Hooks
 

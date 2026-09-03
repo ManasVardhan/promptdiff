@@ -132,6 +132,47 @@ class BundleVerifyResult:
         }
 
 
+def verify_contents(manifest: BundleManifest, contents: dict[str, str]) -> list[str]:
+    """Return a list of problems for *contents* checked against *manifest*.
+
+    An empty list means every manifest entry has a matching content file
+    whose SHA-256 equals the recorded checksum, no extra prompt files are
+    present, and the bundle-level checksum matches the entry set.
+    """
+    problems: list[str] = []
+
+    if manifest.format != BUNDLE_FORMAT:
+        problems.append(
+            f"Unsupported bundle format {manifest.format} "
+            f"(this promptdiff supports format {BUNDLE_FORMAT})"
+        )
+
+    expected = bundle_checksum(manifest.entries)
+    if expected != manifest.checksum:
+        problems.append(
+            "Bundle checksum does not match its entries: the manifest "
+            "was modified after the bundle was created"
+        )
+
+    seen = set()
+    for entry in manifest.entries:
+        seen.add(entry.prompt)
+        if entry.prompt not in contents:
+            problems.append(
+                f"Missing content file for {entry.prompt} v{entry.version}"
+            )
+            continue
+        actual = release_checksum(contents[entry.prompt])
+        if actual != entry.checksum:
+            problems.append(
+                f"Content of {entry.prompt} v{entry.version} does not match "
+                f"its checksum (expected {entry.checksum[:12]}, got {actual[:12]})"
+            )
+    for extra in sorted(set(contents) - seen):
+        problems.append(f"Bundle contains unlisted prompt file: {extra}")
+    return problems
+
+
 def _validate_member_name(name: str) -> str:
     """Return the prompt name for a prompts/ member, rejecting unsafe paths."""
     if not name.startswith(PROMPTS_PREFIX) or not name.endswith(".txt"):
@@ -299,38 +340,9 @@ class BundleManager:
         set. Returns a result whose ``ok`` is False on any mismatch.
         """
         manifest, contents = self._read_archive(bundle_path)
-        result = BundleVerifyResult(manifest=manifest)
-
-        if manifest.format != BUNDLE_FORMAT:
-            result.problems.append(
-                f"Unsupported bundle format {manifest.format} "
-                f"(this promptdiff supports format {BUNDLE_FORMAT})"
-            )
-
-        expected = bundle_checksum(manifest.entries)
-        if expected != manifest.checksum:
-            result.problems.append(
-                "Bundle checksum does not match its entries: the manifest "
-                "was modified after the bundle was created"
-            )
-
-        seen = set()
-        for entry in manifest.entries:
-            seen.add(entry.prompt)
-            if entry.prompt not in contents:
-                result.problems.append(
-                    f"Missing content file for {entry.prompt} v{entry.version}"
-                )
-                continue
-            actual = release_checksum(contents[entry.prompt])
-            if actual != entry.checksum:
-                result.problems.append(
-                    f"Content of {entry.prompt} v{entry.version} does not match "
-                    f"its checksum (expected {entry.checksum[:12]}, got {actual[:12]})"
-                )
-        for extra in sorted(set(contents) - seen):
-            result.problems.append(f"Bundle contains unlisted prompt file: {extra}")
-        return result
+        return BundleVerifyResult(
+            manifest=manifest, problems=verify_contents(manifest, contents)
+        )
 
     def unpack(
         self,
