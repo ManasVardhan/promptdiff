@@ -31,6 +31,7 @@ You iterate on prompts dozens of times. You tweak a system message, change a few
 - ⏱️ **Version Pinning** - Lock prompts to versions in a committable `promptdiff.lock` and fail CI on any drift with `pin check`
 - 📦 **Prompt Bundles** - Pack the pinned prompt set into one checksummed tar.gz artifact, then verify and unpack it at deploy time
 - 🌍 **Bundle Serving** - Load verified bundles in memory with `load_bundle`, or serve them with hot reload via `BundleServer`
+- 🩺 **Store Doctor** - One-command integrity sweep across prompts, pins, releases, tracked files, and remotes, with safe `--fix` repairs
 - 📊 **Evaluation** - Run prompt versions against test cases and score results
 - 📋 **Changelog** - Auto-generate version history with diff stats
 - 💻 **CLI First** - Beautiful terminal output powered by Rich
@@ -346,6 +347,32 @@ promptdiff hook uninstall   # only removes hooks promptdiff created
 
 Missing files are reported but never block a commit.
 
+## Store Doctor
+
+One command that proves the whole store is healthy: metadata versus version files on disk, recorded content hashes, tracked source files, lockfile pins, release checksums, and directory remotes, all in a single sweep:
+
+```bash
+# Full integrity sweep, exit 1 if anything is wrong (great as a CI step)
+promptdiff doctor
+
+# Apply safe repairs: recover unregistered version files, correct a stale
+# latest_version pointer, remove empty orphaned prompt directories
+promptdiff doctor --fix
+
+# Machine-readable report for dashboards
+promptdiff doctor --json-output
+```
+
+```
+Checked 4 prompt(s), 2 tracked file(s), 3 pin(s), 2 release(s), 1 remote(s).
+  ERROR    summarizer: v2.txt content does not match the hash recorded in meta.json (the stored version was edited in place)
+  WARNING  extractor: tracked source file 'prompts/extractor.txt' no longer exists (untrack it with: promptdiff untrack extractor)
+
+2 issue(s) found.
+```
+
+Repairs are strictly non-destructive: the doctor never deletes prompt content and never rewrites recorded checksums, so tampering is always surfaced, never papered over. Everything is also available in Python via `run_doctor(store, fix=True)`, which returns a `DoctorReport` with per-issue category, severity, and fix status.
+
 ## CI Reports and PR Gates
 
 Summarize prompt changes since a date and post the result to a pull request. Designed for CI pipelines:
@@ -523,6 +550,7 @@ def test_prompt_similarity():
 | `promptdiff bundle create <file>` | Pack the pinned prompt set into one verifiable tar.gz artifact |
 | `promptdiff bundle verify <file>` | Verify a bundle against its checksums (exit 1 on tampering) |
 | `promptdiff bundle show\|unpack` | Inspect a bundle or verify and extract it to a directory |
+| `promptdiff doctor [--fix]` | Integrity sweep across the whole store (exit 1 on problems), with safe repairs |
 
 ## License
 

@@ -1,6 +1,6 @@
 """promptdiff - Git-style diff and version control for LLM prompts."""
 
-__version__ = "0.5.0"
+__version__ = "0.6.0"
 
 from promptdiff.store import PromptStore
 from promptdiff.diff import PromptDiff
@@ -28,6 +28,7 @@ from promptdiff.bundles import (
     verify_contents,
 )
 from promptdiff.serving import BundleServer, LoadedBundle, load_bundle
+from promptdiff.doctor import DoctorReport, Issue, run_doctor
 from promptdiff.semantic import SemanticComparison, compare_semantic, local_similarity
 
 # Backward-compatible alias
@@ -63,6 +64,9 @@ __all__ = [
     "BundleServer",
     "LoadedBundle",
     "load_bundle",
+    "DoctorReport",
+    "Issue",
+    "run_doctor",
     "collect_changes",
     "render_markdown",
     "SemanticComparison",

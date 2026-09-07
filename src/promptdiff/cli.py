@@ -1644,5 +1644,79 @@ def bundle_unpack(bundle_path: str, dest: str, force: bool) -> None:
     console.print(f"\n[green]Unpacked {len(written)} prompt(s) into {dest}.[/green]")
 
 
+@cli.command("doctor")
+@click.option("--fix", is_flag=True,
+              help="Apply safe repairs: recover orphaned version files, "
+                   "correct stale latest_version pointers, and remove empty "
+                   "orphaned prompt directories.")
+@click.option("--lockfile", type=click.Path(dir_okay=False), default=None,
+              help="Lockfile path (default: promptdiff.lock in the store root).")
+@click.option("--json-output", is_flag=True, help="Output machine-readable JSON.")
+def doctor_cmd(fix: bool, lockfile: str | None, json_output: bool) -> None:
+    """Run an integrity sweep across the whole store. Exits 1 on problems.
+
+    Checks prompt metadata against version files on disk, recorded
+    content hashes, tracked source files, lockfile pins, release
+    checksums, and directory remotes, so one command proves the store
+    is healthy before a deploy:
+
+        promptdiff doctor
+
+    Safe repairs (never destructive, never rewrites checksums):
+
+        promptdiff doctor --fix
+    """
+    from promptdiff.doctor import SEVERITY_ERROR, run_doctor
+
+    try:
+        report = run_doctor(_get_store(), fix=fix, lockfile=lockfile)
+    except RuntimeError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise SystemExit(1)
+
+    if json_output:
+        click.echo(json.dumps(report.to_dict(), indent=2))
+        if not report.ok:
+            raise SystemExit(1)
+        return
+
+    console.print(
+        f"Checked {report.prompts_checked} prompt(s), "
+        f"{report.tracked_checked} tracked file(s), "
+        f"{report.pins_checked} pin(s), "
+        f"{report.releases_checked} release(s), "
+        f"{report.remotes_checked} remote(s)."
+    )
+
+    for issue in report.issues:
+        if issue.fixed:
+            console.print(
+                f"  [green]FIXED[/green]    {issue.subject}: {escape(issue.detail)}"
+            )
+        elif issue.severity == SEVERITY_ERROR:
+            console.print(
+                f"  [red]ERROR[/red]    {issue.subject}: {escape(issue.detail)}"
+            )
+        else:
+            console.print(
+                f"  [yellow]WARNING[/yellow]  {issue.subject}: {escape(issue.detail)}"
+            )
+
+    fixed = report.fixed
+    outstanding = report.outstanding
+    if fixed:
+        console.print(f"\n[green]Repaired {len(fixed)} issue(s).[/green]")
+    if outstanding:
+        fixable = [i for i in outstanding if i.fixable]
+        console.print(
+            f"\n[red]{len(outstanding)} issue(s) found.[/red]"
+            + (" Run with --fix to repair "
+               f"{len(fixable)} of them." if fixable and not fix else "")
+        )
+        raise SystemExit(1)
+    if not fixed:
+        console.print("\n[green]Store is healthy. No issues found.[/green]")
+
+
 if __name__ == "__main__":
     cli()

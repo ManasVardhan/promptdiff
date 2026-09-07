@@ -32,10 +32,13 @@ Every `verify` outcome is recorded with a timestamp in an append-only audit log 
 ### 🌍 Bundle Serving Helpers
 Runtime helpers that consume bundles without touching the CLI: `load_bundle` reads an archive once, verifies every checksum, and returns an immutable `LoadedBundle` for lookups, while `BundleServer` keeps a bundle loaded for the process lifetime with throttled hot reload on file change (`check_interval`). A reload that fails verification never replaces the last good bundle: the previous prompts keep serving, the failure lands in `last_error`, and `on_error` / `on_reload` hooks observe the lifecycle. Thread-safe, with `reload()` and `reload_if_changed()` for explicit control.
 
-## v0.6 (Planned)
-
 ### 🩺 Prompt Doctor
-`promptdiff doctor` runs an integrity sweep across the whole store: orphaned tracked files, pins pointing at missing versions, releases whose checksums no longer match, stale remotes, and lockfile drift, with `--fix` for safe repairs and exit 1 for CI.
+`promptdiff doctor` runs an integrity sweep across the whole store in one pass: prompt metadata versus version files on disk (unregistered, missing, or edited-in-place versions, stale latest_version pointers, corrupt meta.json), orphaned tracked files, pins pointing at missing or modified versions, lockfile drift, releases whose checksums no longer match, and stale directory remotes. `--fix` applies safe repairs (recover unregistered version files, correct latest_version, remove empty orphaned directories) that never delete content or rewrite checksums, `--json-output` feeds dashboards, and exit 1 makes it a CI gate. `run_doctor()` returns the same `DoctorReport` in Python.
+
+## v0.7 (Planned)
+
+### 🧪 Prompt A/B Snapshots
+`promptdiff ab <name> <v1> <v2> --input file` runs two versions of a prompt template against the same rendered inputs side by side and stores the outputs as a comparable snapshot pair, so teams can eyeball regressions before re-pinning.
 
 ---
 
